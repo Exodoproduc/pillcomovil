@@ -22,7 +22,7 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: JWT_SECRET
-        generateValue: true            # Render genera uno aleatorio seguro
+        sync: false                    # ← Setear MANUALMENTE en dashboard (no auto-generar)
       - key: GOOGLE_CLIENT_ID
         value: "328711529713-3u8ltmi0mcvihsdusspoph7uvbd2sbtt.apps.googleusercontent.com"
       - key: PORT
