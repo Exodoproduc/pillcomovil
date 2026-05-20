@@ -477,6 +477,86 @@ app.post('/api/driver/withdraw', authRequired('driver'), (req, res) => {
 // ───────────────────────────────────────────────────────────
 //  ADMIN
 // ───────────────────────────────────────────────────────────
+app.get('/api/admin/analytics', authRequired('admin'), (_req, res) => {
+  const trips = getCollection('trips');
+  const drivers = getCollection('drivers');
+  const users = getCollection('users');
+
+  const HOY = new Date();
+  const dateStr = d => d.toISOString().slice(0, 10);
+  const restarDias = n => { const x = new Date(HOY); x.setDate(x.getDate() - n); return x; };
+
+  // ─── 14 días: viajes e ingresos por día ───
+  const ultimos14 = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = restarDias(i);
+    const key = dateStr(d);
+    const tripsDia = trips.filter(t => (t.completado || t.creado || '').slice(0, 10) === key);
+    const completados = tripsDia.filter(t => t.estado === 'completado');
+    ultimos14.push({
+      fecha: key,
+      label: d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }),
+      viajes: tripsDia.length,
+      completados: completados.length,
+      ingresos: Math.round(completados.reduce((a, t) => a + (parseFloat(t.precio) || 0), 0) * 100) / 100,
+    });
+  }
+
+  // ─── Distribución por tipo de servicio ───
+  const tipos = { basico: 0, premium: 0, moto: 0, xl: 0, delivery: 0 };
+  trips.forEach(t => { if (tipos[t.tipo] !== undefined) tipos[t.tipo]++; });
+
+  // ─── Distribución por estado ───
+  const estados = { completado: 0, cancelado: 0, buscando: 0, aceptado: 0, en_camino: 0, recogido: 0, sin_conductor: 0 };
+  trips.forEach(t => { if (estados[t.estado] !== undefined) estados[t.estado]++; });
+
+  // ─── Top 5 conductores por ingresos ───
+  const ingresosPorConductor = {};
+  trips.filter(t => t.estado === 'completado' && t.conductorId).forEach(t => {
+    if (!ingresosPorConductor[t.conductorId]) ingresosPorConductor[t.conductorId] = { ingresos: 0, viajes: 0 };
+    ingresosPorConductor[t.conductorId].ingresos += parseFloat(t.precio) || 0;
+    ingresosPorConductor[t.conductorId].viajes += 1;
+  });
+  const topConductores = Object.entries(ingresosPorConductor)
+    .map(([id, d]) => {
+      const drv = drivers.find(x => x.id === id);
+      return {
+        nombre: drv?.nombre || 'Desconocido',
+        viajes: d.viajes,
+        ingresos: Math.round(d.ingresos * 100) / 100,
+        rating: drv?.rating || 0,
+      };
+    })
+    .sort((a, b) => b.ingresos - a.ingresos)
+    .slice(0, 5);
+
+  // ─── Métricas de hora pico (últimos 7 días) ───
+  const tripsRecientes = trips.filter(t => {
+    const d = new Date(t.creado || 0);
+    return (HOY - d) < 7 * 86400000;
+  });
+  const horas = Array(24).fill(0);
+  tripsRecientes.forEach(t => {
+    const h = new Date(t.creado).getHours();
+    if (!isNaN(h)) horas[h]++;
+  });
+
+  res.json({
+    ultimos14,
+    tipos,
+    estados,
+    topConductores,
+    horas,
+    resumen: {
+      totalTrips: trips.length,
+      totalUsuarios: users.length,
+      totalConductores: drivers.length,
+      tasaCompletados: trips.length ? Math.round(estados.completado / trips.length * 100) : 0,
+      tasaCancelacion: trips.length ? Math.round(estados.cancelado / trips.length * 100) : 0,
+    },
+  });
+});
+
 app.get('/api/admin/stats', authRequired('admin'), (_req, res) => {
   const users = getCollection('users');
   const drivers = getCollection('drivers');

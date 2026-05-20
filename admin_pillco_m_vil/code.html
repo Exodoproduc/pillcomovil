@@ -8,6 +8,7 @@
 <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="/shared/api.js"></script>
 <script>
   tailwind.config = { darkMode:"class", theme:{ extend:{ colors:{
@@ -83,37 +84,155 @@
   <main class="flex-grow ml-60 p-8">
     <!-- DASHBOARD -->
     <div id="v-dashboard" class="view active">
-      <h1 class="font-head font-bold text-2xl mb-1">Dashboard</h1>
-      <p class="text-mut text-sm mb-6">Métricas en tiempo real · <span id="clock"></span></p>
+      <div class="flex items-end justify-between mb-6">
+        <div>
+          <h1 class="font-head font-bold text-2xl mb-1">Dashboard</h1>
+          <p class="text-mut text-sm">Métricas en tiempo real · <span id="clock"></span></p>
+        </div>
+        <button onclick="loadDashboard()" class="bg-panel border border-line text-mut hover:text-txt px-3 py-2 rounded-lg text-sm flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px]">refresh</span> Actualizar
+        </button>
+      </div>
+
+      <!-- KPIs -->
       <div id="kpis" class="grid grid-cols-4 gap-4 mb-6"></div>
-      <div class="grid grid-cols-3 gap-4">
+
+      <!-- Gráficos -->
+      <div class="grid grid-cols-3 gap-4 mb-6">
         <div class="col-span-2 bg-panel border border-line rounded-xl p-5">
-          <h3 class="font-semibold mb-4">Viajes recientes</h3>
-          <div id="dash-trips" class="overflow-x-auto"></div>
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="font-semibold">📊 Viajes e ingresos · últimos 14 días</h3>
+            <div class="flex gap-2 text-xs">
+              <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-accent inline-block"></span>Viajes</span>
+              <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-success inline-block"></span>Ingresos</span>
+            </div>
+          </div>
+          <div style="height:280px"><canvas id="chart-trend"></canvas></div>
         </div>
         <div class="bg-panel border border-line rounded-xl p-5">
-          <h3 class="font-semibold mb-4">Estado flota</h3>
-          <div id="dash-fleet"></div>
+          <h3 class="font-semibold mb-3">🚖 Tipo de servicio</h3>
+          <div style="height:280px"><canvas id="chart-tipos"></canvas></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-panel border border-line rounded-xl p-5">
+          <h3 class="font-semibold mb-3">📍 Estado de viajes</h3>
+          <div style="height:240px"><canvas id="chart-estados"></canvas></div>
+        </div>
+        <div class="col-span-2 bg-panel border border-line rounded-xl p-5">
+          <h3 class="font-semibold mb-3">⏰ Demanda por hora · últimos 7 días</h3>
+          <div style="height:240px"><canvas id="chart-horas"></canvas></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4">
+        <div class="col-span-2 bg-panel border border-line rounded-xl p-5">
+          <h3 class="font-semibold mb-3">🏆 Top conductores por ingresos</h3>
+          <div id="dash-top"></div>
+        </div>
+        <div class="bg-panel border border-line rounded-xl p-5">
+          <h3 class="font-semibold mb-3">🚦 Estado de flota</h3>
+          <div id="dash-fleet" class="max-h-72 overflow-y-auto"></div>
         </div>
       </div>
     </div>
 
     <!-- VIAJES -->
     <div id="v-viajes" class="view">
-      <h1 class="font-head font-bold text-2xl mb-6">Viajes</h1>
+      <div class="flex items-end justify-between mb-6">
+        <h1 class="font-head font-bold text-2xl">Viajes</h1>
+        <div class="flex gap-2">
+          <span id="cnt-trips" class="text-mut text-sm self-end pb-2"></span>
+          <button onclick="exportCSV('trips')" class="bg-primary-l text-white px-3 py-2 rounded-lg text-sm flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">file_download</span> Exportar CSV
+          </button>
+        </div>
+      </div>
+      <div class="bg-panel border border-line rounded-xl p-4 mb-4 flex gap-3 flex-wrap">
+        <div class="relative flex-grow min-w-[200px]">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-mut text-[18px]">search</span>
+          <input id="srch-trips" oninput="filterView('trips')" placeholder="Buscar pasajero, destino, ID..." class="w-full bg-panel2 border border-line rounded-lg pl-10 pr-3 py-2 text-sm focus:border-success focus:ring-0"/>
+        </div>
+        <select id="flt-trips-estado" onchange="filterView('trips')" class="bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:border-success focus:ring-0">
+          <option value="">Todos los estados</option>
+          <option value="buscando">Buscando</option>
+          <option value="aceptado">Aceptado</option>
+          <option value="en_camino">En camino</option>
+          <option value="recogido">Recogido</option>
+          <option value="completado">Completado</option>
+          <option value="cancelado">Cancelado</option>
+          <option value="sin_conductor">Sin conductor</option>
+        </select>
+        <select id="flt-trips-tipo" onchange="filterView('trips')" class="bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:border-success focus:ring-0">
+          <option value="">Todos los tipos</option>
+          <option value="basico">Básico</option>
+          <option value="premium">Premium</option>
+          <option value="moto">Moto</option>
+          <option value="xl">XL</option>
+        </select>
+      </div>
       <div class="bg-panel border border-line rounded-xl overflow-hidden"><div id="tbl-trips" class="overflow-x-auto"></div></div>
+      <div id="pag-trips" class="mt-4 flex justify-center gap-1"></div>
     </div>
 
     <!-- CONDUCTORES -->
     <div id="v-conductores" class="view">
-      <h1 class="font-head font-bold text-2xl mb-6">Conductores</h1>
+      <div class="flex items-end justify-between mb-6">
+        <h1 class="font-head font-bold text-2xl">Conductores</h1>
+        <div class="flex gap-2">
+          <span id="cnt-drivers" class="text-mut text-sm self-end pb-2"></span>
+          <button onclick="exportCSV('drivers')" class="bg-primary-l text-white px-3 py-2 rounded-lg text-sm flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">file_download</span> Exportar CSV
+          </button>
+        </div>
+      </div>
+      <div class="bg-panel border border-line rounded-xl p-4 mb-4 flex gap-3 flex-wrap">
+        <div class="relative flex-grow min-w-[200px]">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-mut text-[18px]">search</span>
+          <input id="srch-drivers" oninput="filterView('drivers')" placeholder="Buscar nombre, placa, teléfono..." class="w-full bg-panel2 border border-line rounded-lg pl-10 pr-3 py-2 text-sm focus:border-success focus:ring-0"/>
+        </div>
+        <select id="flt-drivers-online" onchange="filterView('drivers')" class="bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:border-success focus:ring-0">
+          <option value="">Cualquier estado</option>
+          <option value="true">Solo online</option>
+          <option value="false">Solo offline</option>
+        </select>
+        <select id="flt-drivers-docs" onchange="filterView('drivers')" class="bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:border-success focus:ring-0">
+          <option value="">Cualquier docs</option>
+          <option value="true">Aprobados</option>
+          <option value="false">Pendientes</option>
+        </select>
+        <select id="flt-drivers-tipo" onchange="filterView('drivers')" class="bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:border-success focus:ring-0">
+          <option value="">Todos los tipos</option>
+          <option value="basico">Básico</option>
+          <option value="premium">Premium</option>
+          <option value="moto">Moto</option>
+          <option value="xl">XL</option>
+        </select>
+      </div>
       <div class="bg-panel border border-line rounded-xl overflow-hidden"><div id="tbl-drivers" class="overflow-x-auto"></div></div>
+      <div id="pag-drivers" class="mt-4 flex justify-center gap-1"></div>
     </div>
 
     <!-- USUARIOS -->
     <div id="v-usuarios" class="view">
-      <h1 class="font-head font-bold text-2xl mb-6">Usuarios pasajeros</h1>
+      <div class="flex items-end justify-between mb-6">
+        <h1 class="font-head font-bold text-2xl">Usuarios pasajeros</h1>
+        <div class="flex gap-2">
+          <span id="cnt-users" class="text-mut text-sm self-end pb-2"></span>
+          <button onclick="exportCSV('users')" class="bg-primary-l text-white px-3 py-2 rounded-lg text-sm flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">file_download</span> Exportar CSV
+          </button>
+        </div>
+      </div>
+      <div class="bg-panel border border-line rounded-xl p-4 mb-4 flex gap-3 flex-wrap">
+        <div class="relative flex-grow min-w-[200px]">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-mut text-[18px]">search</span>
+          <input id="srch-users" oninput="filterView('users')" placeholder="Buscar nombre, teléfono, email..." class="w-full bg-panel2 border border-line rounded-lg pl-10 pr-3 py-2 text-sm focus:border-success focus:ring-0"/>
+        </div>
+      </div>
       <div class="bg-panel border border-line rounded-xl overflow-hidden"><div id="tbl-users" class="overflow-x-auto"></div></div>
+      <div id="pag-users" class="mt-4 flex justify-center gap-1"></div>
     </div>
 
     <!-- TARIFAS -->
@@ -183,56 +302,294 @@
     ({dashboard:loadDashboard,viajes:loadTrips,conductores:loadDrivers,usuarios:loadUsers,tarifas:loadZones,promos:loadPromos,soporte:loadTickets,logs:loadLogs}[v])();
   }
 
+  // ── Estado por vista (filtros, paginación) ─────────────────
+  const viewState = {
+    trips:   { all: [], filtered: [], page: 1, perPage: 25 },
+    drivers: { all: [], filtered: [], page: 1, perPage: 25 },
+    users:   { all: [], filtered: [], page: 1, perPage: 25 },
+  };
+
+  // ── Gráficos (instancias Chart.js) ─────────────────────────
+  const charts = {};
+  const PALETTE = {
+    primary: '#3fb950', accent: '#58a6ff', warn: '#d29922', error: '#f85149',
+    purple: '#a371f7', cyan: '#39d0d8', pink: '#ec4899',
+  };
+  function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+  Chart.defaults.color = '#8b949e';
+  Chart.defaults.borderColor = '#2d3640';
+  Chart.defaults.font.family = 'Inter, sans-serif';
+
   async function loadDashboard(){
     try{
-      const s=await A.adminStats();
-      document.getElementById('badge-live').textContent=s.viajesActivos+' live';
-      const kpi=(ic,lbl,val,col)=>`<div class="bg-panel border border-line rounded-xl p-5">
-        <div class="flex items-center justify-between mb-2"><span class="material-symbols-outlined ${col}">${ic}</span></div>
-        <p class="font-head font-bold text-2xl">${val}</p><p class="text-mut text-xs">${lbl}</p></div>`;
-      document.getElementById('kpis').innerHTML=
-        kpi('payments','Ingresos totales','S/ '+s.ingresos,'text-success')+
-        kpi('local_taxi','Viajes ('+s.viajesActivos+' activos)',s.viajesTotal,'text-accent')+
-        kpi('group','Usuarios',s.usuarios,'text-warn')+
-        kpi('badge','Conductores ('+s.conductoresOnline+' on)',s.conductores,'text-primary-l');
-      const trips=await A.adminTrips();
-      document.getElementById('dash-trips').innerHTML=tripsTable(trips.slice(0,8));
-      const drv=await A.adminDrivers();
-      document.getElementById('dash-fleet').innerHTML=drv.map(d=>`
+      const [s, an] = await Promise.all([A.adminStats(), A.adminAnalytics()]);
+      document.getElementById('badge-live').textContent = s.viajesActivos+' live';
+
+      // KPIs
+      const kpi = (ic, lbl, val, sub, col) => `<div class="bg-panel border border-line rounded-xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <span class="material-symbols-outlined ${col}">${ic}</span>
+          ${sub ? `<span class="text-[10px] uppercase tracking-wider text-mut">${sub}</span>` : ''}
+        </div>
+        <p class="font-head font-bold text-2xl">${val}</p>
+        <p class="text-mut text-xs mt-1">${lbl}</p></div>`;
+      document.getElementById('kpis').innerHTML =
+        kpi('payments','Ingresos totales','S/ '+s.ingresos, '20% comisión: S/'+s.comision,'text-success')+
+        kpi('local_taxi','Viajes ('+s.viajesActivos+' activos)',s.viajesTotal, an.resumen.tasaCompletados+'% éxito','text-accent')+
+        kpi('group','Usuarios pasajeros',s.usuarios, '','text-warn')+
+        kpi('badge','Conductores ('+s.conductoresOnline+' on)',s.conductores, s.docsPendientes+' pendientes','text-primary-l');
+
+      // Gráfico 1 — Tendencia 14 días
+      destroyChart('trend');
+      charts.trend = new Chart(document.getElementById('chart-trend'), {
+        data: {
+          labels: an.ultimos14.map(d => d.label),
+          datasets: [
+            { type:'bar', label:'Viajes', data: an.ultimos14.map(d => d.viajes), backgroundColor: PALETTE.accent+'aa', borderRadius:4, yAxisID:'y' },
+            { type:'line', label:'Ingresos S/', data: an.ultimos14.map(d => d.ingresos), borderColor: PALETTE.primary, backgroundColor: PALETTE.primary+'22', tension:0.35, yAxisID:'y1', fill:true, pointRadius:3 },
+          ],
+        },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }}, interaction:{mode:'index', intersect:false},
+          scales: {
+            y:  { position:'left',  ticks:{ precision:0 }, title:{ display:true, text:'Viajes' }},
+            y1: { position:'right', ticks:{ callback:v=>'S/'+v }, title:{ display:true, text:'Ingresos' }, grid:{ display:false }},
+          }}
+      });
+
+      // Gráfico 2 — Donut tipo de servicio
+      destroyChart('tipos');
+      const tiposLabels = ['Básico','Premium','Moto','XL','Delivery'];
+      const tiposVals = ['basico','premium','moto','xl','delivery'].map(k => an.tipos[k] || 0);
+      charts.tipos = new Chart(document.getElementById('chart-tipos'), {
+        type: 'doughnut',
+        data: {
+          labels: tiposLabels,
+          datasets: [{ data: tiposVals, backgroundColor: [PALETTE.primary, PALETTE.accent, PALETTE.warn, PALETTE.purple, PALETTE.cyan], borderWidth:0 }],
+        },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, padding:8 }}}}
+      });
+
+      // Gráfico 3 — Donut estados
+      destroyChart('estados');
+      const estadosMap = { completado:'Completado', cancelado:'Cancelado', en_camino:'En camino', aceptado:'Aceptado', buscando:'Buscando', recogido:'Recogido', sin_conductor:'Sin conductor' };
+      const estadosLabels = [], estadosVals = [];
+      const colorEstado = { completado: PALETTE.primary, cancelado: PALETTE.error, en_camino: PALETTE.accent, aceptado: PALETTE.accent, buscando: PALETTE.warn, recogido: PALETTE.cyan, sin_conductor: PALETTE.pink };
+      const estadosColors = [];
+      Object.entries(an.estados).forEach(([k,v]) => { if (v > 0) { estadosLabels.push(estadosMap[k]); estadosVals.push(v); estadosColors.push(colorEstado[k]); }});
+      charts.estados = new Chart(document.getElementById('chart-estados'), {
+        type: 'doughnut',
+        data: { labels: estadosLabels, datasets: [{ data: estadosVals, backgroundColor: estadosColors, borderWidth:0 }] },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, padding:8, font:{size:11} }}}}
+      });
+
+      // Gráfico 4 — Demanda por hora
+      destroyChart('horas');
+      charts.horas = new Chart(document.getElementById('chart-horas'), {
+        type: 'bar',
+        data: {
+          labels: an.horas.map((_,i) => i.toString().padStart(2,'0')+'h'),
+          datasets: [{ label:'Solicitudes', data: an.horas, backgroundColor: an.horas.map((v,i) => (i>=7&&i<=9)||(i>=18&&i<=21) ? PALETTE.warn : PALETTE.accent), borderRadius:3 }],
+        },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ title: it => 'Hora '+it[0].label }}},
+          scales: { y:{ ticks:{ precision:0 }}}}
+      });
+
+      // Top conductores
+      document.getElementById('dash-top').innerHTML = an.topConductores.length ? `<table><thead><tr><th>#</th><th>Conductor</th><th>Viajes</th><th>Rating</th><th class="text-right">Ingresos</th></tr></thead><tbody>
+        ${an.topConductores.map((c,i) => `<tr>
+          <td class="font-bold text-${['success','accent','warn','mut','mut'][i]}">${i+1}</td>
+          <td>${c.nombre}</td><td>${c.viajes}</td><td>⭐ ${c.rating}</td>
+          <td class="text-right text-success">S/ ${c.ingresos.toFixed(2)}</td>
+        </tr>`).join('')}</tbody></table>` : '<p class="text-mut text-center py-8">Sin datos suficientes aún</p>';
+
+      // Flota
+      const drv = await A.adminDrivers();
+      document.getElementById('dash-fleet').innerHTML = drv.map(d => `
         <div class="flex items-center gap-3 py-2 border-b border-line last:border-0">
-          <span class="w-2 h-2 rounded-full ${d.online?'bg-success':'bg-mut'}"></span>
+          <span class="w-2 h-2 rounded-full ${d.online ? 'bg-success' : 'bg-mut'}"></span>
           <div class="flex-grow"><p class="text-sm">${d.nombre}</p><p class="text-xs text-mut">${d.vehiculo}</p></div>
           <span class="text-xs ${d.status==='enviaje'?'text-warn':'text-mut'}">${d.online?(d.status==='enviaje'?'en viaje':'libre'):'offline'}</span>
         </div>`).join('');
-    }catch(e){ toast('Error: '+e.message); }
+    } catch(e) { toast('Error: '+e.message); }
   }
 
-  function tripsTable(trips){
-    const est={buscando:'text-warn',aceptado:'text-accent',en_camino:'text-accent',recogido:'text-accent',completado:'text-success',cancelado:'text-error',sin_conductor:'text-error'};
-    return `<table><thead><tr><th>ID</th><th>Pasajero</th><th>Destino</th><th>Tipo</th><th>Precio</th><th>Surge</th><th>Estado</th></tr></thead><tbody>
-      ${trips.map(t=>`<tr><td class="text-mut">${t.id.slice(-6)}</td><td>${t.pasajeroNombre}</td><td>${t.destinoNombre}</td><td>${t.tipo}</td><td>S/ ${t.precio}</td><td>${t.surge>1?'<span class="text-warn">x'+t.surge+'</span>':'x1'}</td><td class="${est[t.estado]||'text-mut'}">${t.estado}</td></tr>`).join('')||'<tr><td colspan=7 class="text-center text-mut py-6">Sin viajes</td></tr>'}
+  // ════════════════════════════════════════════════════════════
+  //  Tablas con filtros + búsqueda + paginación + CSV
+  // ════════════════════════════════════════════════════════════
+
+  // ─── Trips ───
+  async function loadTrips() {
+    viewState.trips.all = await A.adminTrips();
+    viewState.trips.page = 1;
+    filterView('trips');
+  }
+
+  async function loadDrivers() {
+    viewState.drivers.all = await A.adminDrivers();
+    viewState.drivers.page = 1;
+    filterView('drivers');
+  }
+
+  async function loadUsers() {
+    viewState.users.all = await A.adminUsers();
+    viewState.users.page = 1;
+    filterView('users');
+  }
+
+  function filterView(view) {
+    const v = viewState[view];
+    const q = (document.getElementById('srch-'+view)?.value || '').toLowerCase().trim();
+    let arr = v.all.slice();
+
+    if (view === 'trips') {
+      const estado = document.getElementById('flt-trips-estado').value;
+      const tipo   = document.getElementById('flt-trips-tipo').value;
+      if (estado) arr = arr.filter(t => t.estado === estado);
+      if (tipo)   arr = arr.filter(t => t.tipo === tipo);
+      if (q) arr = arr.filter(t =>
+        (t.id||'').toLowerCase().includes(q) ||
+        (t.pasajeroNombre||'').toLowerCase().includes(q) ||
+        (t.destinoNombre||'').toLowerCase().includes(q));
+    } else if (view === 'drivers') {
+      const online = document.getElementById('flt-drivers-online').value;
+      const docs   = document.getElementById('flt-drivers-docs').value;
+      const tipo   = document.getElementById('flt-drivers-tipo').value;
+      if (online !== '') arr = arr.filter(d => String(d.online) === online);
+      if (docs   !== '') arr = arr.filter(d => String(d.docsAprobados) === docs);
+      if (tipo)   arr = arr.filter(d => d.tipo === tipo);
+      if (q) arr = arr.filter(d =>
+        (d.nombre||'').toLowerCase().includes(q) ||
+        (d.placa||'').toLowerCase().includes(q) ||
+        (d.tel||'').includes(q));
+    } else if (view === 'users') {
+      if (q) arr = arr.filter(u =>
+        (u.nombre||'').toLowerCase().includes(q) ||
+        (u.tel||'').includes(q) ||
+        (u.email||'').toLowerCase().includes(q));
+    }
+
+    v.filtered = arr;
+    if ((v.page - 1) * v.perPage >= arr.length) v.page = 1;
+    document.getElementById('cnt-'+view).textContent = `${arr.length} de ${v.all.length}`;
+    renderView(view);
+  }
+
+  function renderView(view) {
+    const v = viewState[view];
+    const start = (v.page - 1) * v.perPage;
+    const slice = v.filtered.slice(start, start + v.perPage);
+    const html = ({
+      trips:   tripsTableHtml,
+      drivers: driversTableHtml,
+      users:   usersTableHtml,
+    })[view](slice);
+    document.getElementById('tbl-'+view).innerHTML = html;
+    renderPagination(view);
+  }
+
+  function renderPagination(view) {
+    const v = viewState[view];
+    const total = Math.ceil(v.filtered.length / v.perPage);
+    if (total <= 1) { document.getElementById('pag-'+view).innerHTML = ''; return; }
+    let html = '';
+    const btn = (n, lbl, active, disabled) => `<button onclick="goPage('${view}',${n})" ${disabled?'disabled':''} class="px-3 py-1.5 rounded text-sm ${active?'bg-primary-l text-white':'bg-panel border border-line hover:bg-panel2'} ${disabled?'opacity-30':''}">${lbl}</button>`;
+    html += btn(v.page-1, '‹', false, v.page === 1);
+    for (let i = 1; i <= total; i++) {
+      if (i === 1 || i === total || Math.abs(i - v.page) <= 1) html += btn(i, i, i === v.page, false);
+      else if (Math.abs(i - v.page) === 2) html += `<span class="px-2 text-mut">…</span>`;
+    }
+    html += btn(v.page+1, '›', false, v.page === total);
+    document.getElementById('pag-'+view).innerHTML = html;
+  }
+
+  function goPage(view, n) {
+    const v = viewState[view];
+    const total = Math.ceil(v.filtered.length / v.perPage);
+    if (n < 1 || n > total) return;
+    v.page = n;
+    renderView(view);
+  }
+
+  // ── Renderers ──
+  const est = { buscando:'text-warn', aceptado:'text-accent', en_camino:'text-accent', recogido:'text-accent', completado:'text-success', cancelado:'text-error', sin_conductor:'text-error' };
+  function tripsTableHtml(trips) {
+    return `<table><thead><tr><th>ID</th><th>Pasajero</th><th>Destino</th><th>Tipo</th><th>Precio</th><th>Surge</th><th>Estado</th><th>Fecha</th></tr></thead><tbody>
+      ${trips.map(t=>`<tr>
+        <td class="text-mut">${(t.id||'').slice(-6)}</td>
+        <td>${t.pasajeroNombre||'—'}</td>
+        <td>${t.destinoNombre||'—'}</td>
+        <td>${t.tipo||''}</td>
+        <td>S/ ${t.precio||'0'}</td>
+        <td>${t.surge>1?'<span class="text-warn">x'+t.surge+'</span>':'x1'}</td>
+        <td class="${est[t.estado]||'text-mut'}">${t.estado}</td>
+        <td class="text-mut text-xs">${t.creado?new Date(t.creado).toLocaleString('es-PE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</td>
+      </tr>`).join('') || '<tr><td colspan=8 class="text-center text-mut py-8">Sin viajes que coincidan</td></tr>'}
     </tbody></table>`;
   }
-  async function loadTrips(){ document.getElementById('tbl-trips').innerHTML=tripsTable(await A.adminTrips()); }
-
-  async function loadDrivers(){
-    const d=await A.adminDrivers();
-    document.getElementById('tbl-drivers').innerHTML=`<table><thead><tr><th>Conductor</th><th>Vehículo</th><th>Placa</th><th>Rating</th><th>Viajes</th><th>Monedero</th><th>Docs</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
-      ${d.map(x=>`<tr><td>${x.nombre}</td><td>${x.vehiculo}</td><td class="text-mut">${x.placa}</td><td>⭐ ${x.rating}</td><td>${x.viajesTotal}</td><td class="text-success">S/ ${x.monedero.toFixed(2)}</td>
-      <td>${x.docsAprobados?'<span class="text-success">✓ Aprobado</span>':'<span class="text-warn">⏳ Pendiente</span>'}</td>
-      <td><span class="w-2 h-2 rounded-full inline-block ${x.online?'bg-success':'bg-mut'}"></span> ${x.online?'online':'offline'}</td>
-      <td>${x.docsAprobados
-        ?`<button onclick="approve('${x.id}',false)" class="text-error text-xs">Suspender</button>`
-        :`<button onclick="approve('${x.id}',true)" class="bg-primary-l text-white text-xs px-3 py-1 rounded">Aprobar</button>`}</td></tr>`).join('')}
+  function driversTableHtml(d) {
+    return `<table><thead><tr><th>Conductor</th><th>Tipo</th><th>Vehículo</th><th>Placa</th><th>Tel</th><th>Rating</th><th>Viajes</th><th>Monedero</th><th>Docs</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
+      ${d.map(x=>`<tr>
+        <td>${x.nombre}</td>
+        <td><span class="bg-panel2 px-2 py-0.5 rounded text-xs">${x.tipo||''}</span></td>
+        <td>${x.vehiculo}</td>
+        <td class="text-mut">${x.placa}</td>
+        <td class="text-mut text-xs">+51 ${x.tel}</td>
+        <td>⭐ ${x.rating}</td>
+        <td>${x.viajesTotal}</td>
+        <td class="text-success">S/ ${x.monedero.toFixed(2)}</td>
+        <td>${x.docsAprobados?'<span class="text-success">✓</span>':'<span class="text-warn">⏳</span>'}</td>
+        <td><span class="w-2 h-2 rounded-full inline-block ${x.online?'bg-success':'bg-mut'}"></span> ${x.online?'on':'off'}</td>
+        <td>${x.docsAprobados
+          ? `<button onclick="approve('${x.id}',false)" class="text-error text-xs hover:underline">Suspender</button>`
+          : `<button onclick="approve('${x.id}',true)" class="bg-primary-l text-white text-xs px-3 py-1 rounded">Aprobar</button>`}</td>
+      </tr>`).join('') || '<tr><td colspan=11 class="text-center text-mut py-8">Sin conductores</td></tr>'}
     </tbody></table>`;
   }
-  async function approve(id,ok){ await A.approveDriver(id,ok); toast(ok?'Conductor aprobado':'Conductor suspendido'); loadDrivers(); }
-
-  async function loadUsers(){
-    const u=await A.adminUsers();
-    document.getElementById('tbl-users').innerHTML=`<table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Viajes</th><th>Rating</th><th>Registro</th></tr></thead><tbody>
-      ${u.map(x=>`<tr><td>${x.nombre}</td><td class="text-mut">+51 ${x.tel}</td><td>${x.viajesTotal||0}</td><td>⭐ ${x.rating||5}</td><td class="text-mut">${x.creado?new Date(x.creado).toLocaleDateString():'—'}</td></tr>`).join('')||'<tr><td colspan=5 class="text-center text-mut py-6">Sin usuarios aún</td></tr>'}
+  function usersTableHtml(u) {
+    return `<table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Viajes</th><th>Rating</th><th>Registro</th></tr></thead><tbody>
+      ${u.map(x=>`<tr>
+        <td>${x.nombre}</td>
+        <td class="text-mut">+51 ${x.tel||'—'}</td>
+        <td class="text-mut text-xs">${x.email||'—'}</td>
+        <td>${x.viajesTotal||0}</td>
+        <td>⭐ ${x.rating||5}</td>
+        <td class="text-mut text-xs">${x.creado?new Date(x.creado).toLocaleDateString('es-PE'):'—'}</td>
+      </tr>`).join('') || '<tr><td colspan=6 class="text-center text-mut py-8">Sin usuarios</td></tr>'}
     </tbody></table>`;
+  }
+
+  async function approve(id, ok) { await A.approveDriver(id, ok); toast(ok?'Conductor aprobado':'Conductor suspendido'); loadDrivers(); }
+
+  // ── Export CSV ──
+  function exportCSV(view) {
+    const v = viewState[view];
+    if (!v.filtered.length) return toast('Nada que exportar');
+
+    const fields = ({
+      trips:   ['id','pasajeroNombre','destinoNombre','tipo','precio','distanciaKm','minutos','surge','pago','estado','creado','completado','conductorId'],
+      drivers: ['id','nombre','tel','tipo','vehiculo','placa','rating','viajesTotal','monedero','online','docsAprobados','lat','lng','creado'],
+      users:   ['id','nombre','tel','email','viajesTotal','rating','creado'],
+    })[view];
+
+    const escape = v => {
+      if (v == null) return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const csv = [
+      fields.join(','),
+      ...v.filtered.map(row => fields.map(f => escape(row[f])).join(',')),
+    ].join('\n');
+
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const fecha = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `pillco_${view}_${fecha}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`Exportado ${v.filtered.length} filas → CSV`);
   }
 
   async function loadZones(){

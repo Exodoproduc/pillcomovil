@@ -66,7 +66,8 @@
     driverWithdraw: (monto)    => req('POST', '/api/driver/withdraw', { monto }),
 
     // Admin
-    adminStats:   ()           => req('GET', '/api/admin/stats'),
+    adminStats:     ()         => req('GET', '/api/admin/stats'),
+    adminAnalytics: ()         => req('GET', '/api/admin/analytics'),
     adminDrivers: ()           => req('GET', '/api/admin/drivers'),
     adminUsers:   ()           => req('GET', '/api/admin/users'),
     adminTrips:   ()           => req('GET', '/api/admin/trips'),
