@@ -1,19 +1,25 @@
 // ════════════════════════════════════════════════════════════
-//  Capa de persistencia — JSON file store
-//  Para producción: reemplazar por PostgreSQL + Prisma/Knex.
-//  El contrato (getCollection/save) se mantiene igual.
+//  Capa de persistencia — PostgreSQL (Supabase) con fallback JSON
+//  • Si DATABASE_URL existe → PostgreSQL (producción)
+//  • Si no → JSON file (desarrollo local)
+//
+//  Estrategia: cache en memoria + persistencia debounced.
+//  El estado completo se guarda como JSONB en una sola fila.
+//  Mantiene el mismo contrato getCollection / save / addLog.
 // ════════════════════════════════════════════════════════════
 const fs = require('fs');
 const path = require('path');
 
 const DB_PATH = path.join(__dirname, '..', 'db.json');
+const DATABASE_URL = process.env.DATABASE_URL;
+const USE_POSTGRES = !!DATABASE_URL;
 
 const SEED = {
-  users: [],          // pasajeros
+  users: [],
   drivers: [
     {
       id: 'drv_001', nombre: 'Javier López', tel: '987654321',
-      password: '$2a$10$rZ8Q9XqK0J3vYwL5nXpHsezF.PvN1xL8K7mD2cB4aR6tY9wU3sV0i', // "pillco2026"
+      password: '$2a$10$rZ8Q9XqK0J3vYwL5nXpHsezF.PvN1xL8K7mD2cB4aR6tY9wU3sV0i',
       vehiculo: 'Kia Soluto Verde', placa: 'W1A-452', rating: 4.9,
       lat: -9.9286, lng: -76.2452, online: false, status: 'idle',
       docsAprobados: true, soat: true, licencia: true, antecedentes: true,
@@ -60,47 +66,86 @@ const SEED = {
   logs: [],
 };
 
+let pool = null;
 let cache = null;
+let persistTimer = null;
 
-function load() {
-  if (cache) return cache;
-  try {
+// ────────── INICIALIZACIÓN ──────────
+async function init() {
+  if (USE_POSTGRES) {
+    const { Pool } = require('pg');
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: { rejectUnauthorized: false }, // requerido por Supabase
+      max: 4,                              // free tier permite pocas conexiones
+      idleTimeoutMillis: 30_000,
+    });
+
+    // Crear tabla si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pillco_state (
+        id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        data JSONB NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT now()
+      )
+    `);
+
+    const { rows } = await pool.query('SELECT data FROM pillco_state WHERE id = 1');
+    if (rows.length === 0) {
+      cache = JSON.parse(JSON.stringify(SEED));
+      await pool.query(
+        'INSERT INTO pillco_state(id, data) VALUES(1, $1::jsonb)',
+        [JSON.stringify(cache)]
+      );
+      console.log('[db] PostgreSQL: estado inicial sembrado');
+    } else {
+      cache = rows[0].data;
+      // Asegurar todas las colecciones requeridas
+      for (const k of Object.keys(SEED)) if (!cache[k]) cache[k] = SEED[k];
+    }
+    console.log(`[db] PostgreSQL conectado · ${cache.drivers.length} conductores · ${cache.users.length} usuarios · ${cache.trips.length} viajes`);
+  } else {
+    // Modo desarrollo: archivo JSON
     if (fs.existsSync(DB_PATH)) {
-      cache = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+      try { cache = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8')); }
+      catch (e) { console.error('[db] error cargando JSON, usando seed'); cache = JSON.parse(JSON.stringify(SEED)); }
     } else {
       cache = JSON.parse(JSON.stringify(SEED));
-      persist();
     }
-  } catch (e) {
-    console.error('[db] error cargando, usando seed:', e.message);
-    cache = JSON.parse(JSON.stringify(SEED));
+    for (const k of Object.keys(SEED)) if (!cache[k]) cache[k] = SEED[k];
+    console.log(`[db] Modo desarrollo (JSON file) · ${cache.drivers.length} conductores`);
   }
-  // Asegurar todas las colecciones
-  for (const k of Object.keys(SEED)) if (!cache[k]) cache[k] = SEED[k];
-  return cache;
 }
 
-let persistTimer = null;
+// ────────── PERSISTENCIA ──────────
 function persist() {
   clearTimeout(persistTimer);
-  persistTimer = setTimeout(() => {
-    try {
-      fs.writeFileSync(DB_PATH, JSON.stringify(cache, null, 2));
-    } catch (e) {
-      console.error('[db] error guardando:', e.message);
+  persistTimer = setTimeout(async () => {
+    if (USE_POSTGRES) {
+      try {
+        await pool.query(
+          `INSERT INTO pillco_state(id, data, updated_at) VALUES(1, $1::jsonb, now())
+           ON CONFLICT (id) DO UPDATE SET data = $1::jsonb, updated_at = now()`,
+          [JSON.stringify(cache)]
+        );
+      } catch (e) {
+        console.error('[db] error guardando en PostgreSQL:', e.message);
+      }
+    } else {
+      try { fs.writeFileSync(DB_PATH, JSON.stringify(cache, null, 2)); }
+      catch (e) { console.error('[db] error guardando JSON:', e.message); }
     }
-  }, 150);
+  }, 300);
 }
 
+// ────────── API PÚBLICA ──────────
 function getCollection(name) {
-  const db = load();
-  if (!db[name]) db[name] = [];
-  return db[name];
+  if (!cache) throw new Error('[db] init() no ha sido llamado todavía');
+  if (!cache[name]) cache[name] = [];
+  return cache[name];
 }
 
-function save() {
-  persist();
-}
+function save() { persist(); }
 
 function addLog(tipo, detalle) {
   const logs = getCollection('logs');
@@ -109,4 +154,10 @@ function addLog(tipo, detalle) {
   save();
 }
 
-module.exports = { getCollection, save, addLog, load };
+// Compat: load síncrono usado por código viejo
+function load() {
+  if (!cache) throw new Error('[db] init() no ha sido llamado todavía');
+  return cache;
+}
+
+module.exports = { init, getCollection, save, addLog, load };

@@ -8,7 +8,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const { Server } = require('socket.io');
 
-const { getCollection, save, addLog } = require('./lib/db');
+const { init: initDb, getCollection, save, addLog } = require('./lib/db');
 const { sign, authRequired } = require('./lib/auth');
 const { cotizar } = require('./lib/pricing');
 const { encontrarConductores } = require('./lib/matching');
@@ -526,7 +526,13 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`\n🚖 Pillco Backend en http://localhost:${PORT}`);
-  console.log(`   Socket.IO activo · ${getCollection('drivers').length} conductores seed\n`);
+
+initDb().then(() => {
+  server.listen(PORT, () => {
+    console.log(`\n🚖 Pillco Backend en http://localhost:${PORT}`);
+    console.log(`   Socket.IO activo · ${getCollection('drivers').length} conductores cargados\n`);
+  });
+}).catch(err => {
+  console.error('❌ Error inicializando DB:', err);
+  process.exit(1);
 });
