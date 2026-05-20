@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html class="light" lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Pillco Conductor</title>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<meta name="theme-color" content="#003820"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png"/>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="/shared/api.js"></script>
+<script id="tailwind-config">
+  tailwind.config = { darkMode: "class", theme: { extend: {
+    colors: {
+      "primary": "#003820", "secondary": "#006399", "tertiary": "#482904",
+      "on-primary": "#ffffff", "background": "#f7fafd", "on-surface": "#181c1f",
+      "on-surface-variant": "#404942", "outline": "#707971", "outline-variant": "#c0c9c0",
+      "surface-container-lowest": "#ffffff", "surface-container-low": "#f1f4f7",
+      "surface-container": "#ebeef2", "surface-container-high": "#e5e8ec",
+      "primary-container": "#0f5132", "primary-fixed-dim": "#95d4ac",
+      "error": "#ba1a1a", "error-container": "#ffdad6", "success": "#0f8a3c",
+      "secondary-container": "#67bafd", "tertiary-container": "#623f18",
+    },
+    borderRadius: { lg: "0.5rem", xl: "0.75rem", full: "9999px" },
+    fontFamily: { "head": ["Montserrat"], "body": ["Inter"] },
+  }}}
+</script>
+<style>
+  body { font-family: Inter, sans-serif; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400; }
+  #map { width:100%; height:100%; z-index:1; background:#e6e8eb; }
+  .screen { display:none; }
+  .screen.active { display:flex; }
+  #toast { position:fixed; top:20px; left:50%; transform:translateX(-50%) translateY(-100px);
+    transition:transform .3s; z-index:9999; background:#003820; color:#fff;
+    padding:12px 22px; border-radius:12px; font-size:14px; box-shadow:0 4px 20px rgba(0,0,0,.25); }
+  #toast.show { transform:translateX(-50%) translateY(0); }
+  .spinner { width:20px;height:20px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
+    border-radius:50%;animation:spin .7s linear infinite;display:inline-block; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .driver-marker { width:40px;height:40px;background:#003820;color:#fff;border:3px solid #fff;
+    border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'Material Symbols Outlined';font-size:22px;box-shadow:0 3px 10px rgba(0,0,0,.35); }
+  .pickup-marker { width:18px;height:18px;background:#006399;border:3px solid #fff;border-radius:50%;
+    box-shadow:0 0 0 6px rgba(0,99,153,.3); }
+  #req-modal { transition:transform .3s, opacity .3s; transform:translateY(100%); opacity:0; }
+  #req-modal.open { transform:translateY(0); opacity:1; }
+  @keyframes ring { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+  .ring-anim { animation:ring 1s ease-in-out infinite; }
+  .toggle-track { width:56px;height:32px;border-radius:999px;background:#c0c9c0;transition:background .25s;position:relative;cursor:pointer; }
+  .toggle-track.on { background:#0f8a3c; }
+  .toggle-thumb { width:26px;height:26px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3); }
+  .toggle-track.on .toggle-thumb { left:27px; }
+</style>
+</head>
+<body class="bg-background text-on-surface min-h-screen">
+
+<div id="toast"></div>
+
+<!-- ══════════ LOGIN ══════════ -->
+<section id="screen-login" class="screen active flex-col items-center justify-center min-h-screen px-6 bg-primary">
+  <div class="w-full max-w-sm flex flex-col items-center gap-6">
+    <img src="/icons/icon-192.png" class="w-24 h-24 rounded-3xl shadow-2xl"/>
+    <div class="text-center">
+      <h1 class="font-head text-3xl font-bold text-white">Pillco Conductor</h1>
+      <p class="text-primary-fixed-dim mt-1">Gana dinero conduciendo en Huánuco</p>
+    </div>
+    <div class="w-full bg-white rounded-2xl p-6 flex flex-col gap-4 shadow-2xl">
+      <div>
+        <label class="text-xs font-medium text-on-surface-variant mb-1 block">Teléfono</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">smartphone</span>
+          <input id="d-tel" type="tel" maxlength="9" placeholder="987111222"
+            class="w-full bg-surface-container-low border-0 border-b-2 border-outline-variant focus:border-primary focus:ring-0 pl-10 py-3 rounded-t-lg"/>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-on-surface-variant mb-1 block">Contraseña</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">lock</span>
+          <input id="d-pass" type="password" placeholder="••••••••"
+            class="w-full bg-surface-container-low border-0 border-b-2 border-outline-variant focus:border-primary focus:ring-0 pl-10 py-3 rounded-t-lg"/>
+        </div>
+      </div>
+      <button onclick="doLogin()" id="btn-login"
+        class="w-full bg-primary text-white font-semibold py-4 rounded-xl active:scale-95 transition-transform flex items-center justify-center gap-2">
+        Ingresar <span class="material-symbols-outlined">arrow_forward</span>
+      </button>
+      <p class="text-xs text-center text-outline">Demo: <b>987111222</b> / <b>pillco2026</b> (María, Premium)</p>
+      <p class="text-xs text-center text-outline -mt-2">o <b>987654321</b> (Javier, Básico)</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ APP (online) ══════════ -->
+<section id="screen-app" class="screen flex-col h-screen">
+  <!-- Header -->
+  <header class="bg-primary text-white px-5 py-3 flex items-center justify-between z-30">
+    <div class="flex items-center gap-3">
+      <img id="hdr-avatar" src="/icons/icon-192.png" class="w-10 h-10 rounded-full border-2 border-primary-fixed-dim"/>
+      <div>
+        <p id="hdr-name" class="font-semibold text-sm">Conductor</p>
+        <p class="text-xs text-primary-fixed-dim flex items-center gap-1">
+          <span class="material-symbols-outlined text-[14px]" style="font-variation-settings:'FILL' 1">star</span>
+          <span id="hdr-rating">4.9</span> · <span id="hdr-vehiculo">—</span>
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="status-label" class="text-xs font-semibold">OFFLINE</span>
+      <div id="toggle" class="toggle-track" onclick="toggleOnline()">
+        <div class="toggle-thumb"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mapa -->
+  <main class="relative flex-grow">
+    <div id="map"></div>
+
+    <!-- Banner estado -->
+    <div id="state-banner" class="absolute top-3 left-3 right-3 z-20 bg-white rounded-xl shadow-lg px-4 py-3 flex items-center gap-3">
+      <span id="banner-icon" class="material-symbols-outlined text-outline">power_settings_new</span>
+      <p id="banner-text" class="text-sm font-medium flex-grow">Estás offline. Activa para recibir viajes.</p>
+    </div>
+
+    <!-- Docs warning -->
+    <div id="docs-warn" class="absolute top-20 left-3 right-3 z-20 bg-error-container border border-error/30 rounded-xl px-4 py-3 hidden">
+      <p class="text-sm text-error flex items-center gap-2">
+        <span class="material-symbols-outlined text-[18px]">warning</span>
+        Documentos pendientes de aprobación. No recibirás viajes.
+      </p>
+    </div>
+  </main>
+
+  <!-- Bottom dock -->
+  <nav class="bg-white border-t border-outline-variant/30 flex justify-around py-2 z-30">
+    <button onclick="showTab('mapa')" data-tab="mapa" class="tab-btn flex flex-col items-center gap-0.5 px-4 py-1 text-primary">
+      <span class="material-symbols-outlined">explore</span><span class="text-[11px] font-medium">Mapa</span>
+    </button>
+    <button onclick="showTab('ganancias')" data-tab="ganancias" class="tab-btn flex flex-col items-center gap-0.5 px-4 py-1 text-outline">
+      <span class="material-symbols-outlined">payments</span><span class="text-[11px] font-medium">Ganancias</span>
+    </button>
+    <button onclick="showTab('historial')" data-tab="historial" class="tab-btn flex flex-col items-center gap-0.5 px-4 py-1 text-outline">
+      <span class="material-symbols-outlined">receipt_long</span><span class="text-[11px] font-medium">Historial</span>
+    </button>
+    <button onclick="showTab('perfil')" data-tab="perfil" class="tab-btn flex flex-col items-center gap-0.5 px-4 py-1 text-outline">
+      <span class="material-symbols-outlined">person</span><span class="text-[11px] font-medium">Perfil</span>
+    </button>
+  </nav>
+</section>
+
+<!-- ══════════ Solicitud de viaje (modal) ══════════ -->
+<div id="req-modal" class="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl p-6">
+  <div class="ring-anim flex flex-col items-center gap-1 mb-4">
+    <div class="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center">
+      <span class="material-symbols-outlined text-primary text-3xl">notifications_active</span>
+    </div>
+    <p class="font-head font-bold text-lg text-primary">¡Nuevo viaje!</p>
+  </div>
+  <div class="bg-surface-container-low rounded-xl p-4 flex flex-col gap-3 mb-4">
+    <div class="flex justify-between items-center">
+      <span class="text-xs text-outline">Pasajero</span>
+      <span id="rq-pasajero" class="font-semibold">—</span>
+    </div>
+    <div class="flex justify-between items-center">
+      <span class="text-xs text-outline">Ganancia (80%)</span>
+      <span id="rq-precio" class="font-head font-bold text-xl text-success">S/ 0</span>
+    </div>
+    <div class="border-t border-outline-variant/30 pt-3 flex flex-col gap-2">
+      <p class="text-sm flex items-center gap-2"><span class="material-symbols-outlined text-secondary text-[18px]">my_location</span> <span id="rq-origen">Recojo</span></p>
+      <p class="text-sm flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">location_on</span> <span id="rq-destino">Destino</span></p>
+      <p class="text-xs text-outline pl-6"><span id="rq-dist">0</span> km · a <span id="rq-eta">0</span> min de ti</p>
+    </div>
+  </div>
+  <div class="flex gap-3">
+    <button onclick="rejectReq()" class="flex-1 border-2 border-error/30 text-error py-4 rounded-xl font-semibold active:scale-95 transition-transform">Rechazar</button>
+    <button onclick="acceptReq()" class="flex-1 bg-primary text-white py-4 rounded-xl font-semibold active:scale-95 transition-transform">Aceptar</button>
+  </div>
+  <div class="mt-3 h-1.5 bg-outline-variant/20 rounded-full overflow-hidden">
+    <div id="rq-timer" class="h-full bg-primary" style="width:100%;transition:width 15s linear"></div>
+  </div>
+</div>
+
+<!-- ══════════ Viaje activo (overlay) ══════════ -->
+<div id="active-trip" class="fixed inset-x-0 bottom-0 z-40 bg-white rounded-t-3xl shadow-2xl p-6 hidden">
+  <div class="w-12 h-1.5 bg-outline-variant/30 rounded-full mx-auto mb-4"></div>
+  <div class="flex items-center gap-3 mb-4">
+    <div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center">
+      <span class="material-symbols-outlined text-secondary">person</span>
+    </div>
+    <div class="flex-grow">
+      <p id="at-pasajero" class="font-semibold">Pasajero</p>
+      <p id="at-destino" class="text-xs text-outline">Destino</p>
+    </div>
+    <a id="at-call" href="#" class="w-11 h-11 bg-secondary text-white rounded-full flex items-center justify-center">
+      <span class="material-symbols-outlined">call</span>
+    </a>
+  </div>
+  <button id="at-action" onclick="nextTripState()" class="w-full bg-primary text-white py-4 rounded-xl font-semibold active:scale-95 transition-transform">
+    Voy en camino
+  </button>
+  <button onclick="cancelActive()" class="w-full text-error text-sm py-2 mt-2">Cancelar viaje</button>
+</div>
+
+<script>
+  const A = window.PillcoAPI;
+  let socket, driver = null, map, dMarker, pickupMarker, destMarker, routeLine;
+  let reqTrip = null, activeTrip = null, reqTimeout = null, geoWatch = null;
+
+  // ── Toast ──
+  function toast(m, c='#003820'){ const t=document.getElementById('toast'); t.textContent=m; t.style.background=c; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2800); }
+
+  // ── Login ──
+  async function doLogin(){
+    const tel=document.getElementById('d-tel').value.trim();
+    const pass=document.getElementById('d-pass').value;
+    const btn=document.getElementById('btn-login');
+    btn.innerHTML='<span class="spinner"></span>'; btn.disabled=true;
+    try{
+      const r=await A.driverLogin(tel,pass);
+      A.setToken(r.token);
+      driver=r.driver;
+      localStorage.setItem('pillco_driver', JSON.stringify(driver));
+      enterApp();
+    }catch(e){
+      toast(e.message,'#ba1a1a');
+      btn.innerHTML='Ingresar <span class="material-symbols-outlined">arrow_forward</span>'; btn.disabled=false;
+    }
+  }
+
+  function enterApp(){
+    document.getElementById('screen-login').classList.remove('active');
+    document.getElementById('screen-app').classList.add('active');
+    document.getElementById('hdr-name').textContent = driver.nombre;
+    document.getElementById('hdr-rating').textContent = driver.rating;
+    document.getElementById('hdr-vehiculo').textContent = driver.vehiculo;
+    if(!driver.docsAprobados) document.getElementById('docs-warn').classList.remove('hidden');
+    initMap();
+    connectSocket();
+  }
+
+  // ── Mapa ──
+  function initMap(){
+    map = L.map('map',{zoomControl:false,attributionControl:false}).setView([driver.lat,driver.lng],15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+    dMarker = L.marker([driver.lat,driver.lng],{icon:L.divIcon({className:'',html:'<div class="driver-marker">directions_car</div>',iconSize:[40,40],iconAnchor:[20,20]})}).addTo(map);
+  }
+
+  // ── Socket ──
+  function connectSocket(){
+    socket = io(A.base);
+    socket.on('connect', ()=> socket.emit('driver_online', driver.id));
+    socket.on('nuevo_viaje', ({trip,distancia,etaMin})=>{
+      if(activeTrip) return;
+      reqTrip=trip;
+      document.getElementById('rq-pasajero').textContent=trip.pasajeroNombre;
+      document.getElementById('rq-precio').textContent='S/ '+(trip.precio*0.8).toFixed(2);
+      document.getElementById('rq-origen').textContent='Plaza de Armas de Huánuco';
+      document.getElementById('rq-destino').textContent=trip.destinoNombre;
+      document.getElementById('rq-dist').textContent=(distancia||trip.distanciaKm||0).toFixed?.(1)||trip.distanciaKm;
+      document.getElementById('rq-eta').textContent=etaMin||trip.minutos;
+      openReq();
+    });
+    socket.on('docs_status', ({aprobado})=>{
+      document.getElementById('docs-warn').classList.toggle('hidden', aprobado);
+      toast(aprobado?'✓ Documentos aprobados':'Documentos rechazados', aprobado?'#0f8a3c':'#ba1a1a');
+      driver.docsAprobados=aprobado;
+    });
+  }
+
+  // ── Toggle online ──
+  let online=false;
+  async function toggleOnline(){
+    if(!driver.docsAprobados){ toast('Espera la aprobación de tus documentos','#ba1a1a'); return; }
+    online=!online;
+    try{
+      await A.driverStatus(online);
+      document.getElementById('toggle').classList.toggle('on',online);
+      document.getElementById('status-label').textContent= online?'ONLINE':'OFFLINE';
+      document.getElementById('banner-icon').textContent= online?'wifi_tethering':'power_settings_new';
+      document.getElementById('banner-text').textContent= online?'Buscando viajes cercanos…':'Estás offline. Activa para recibir viajes.';
+      toast(online?'✓ Ahora estás en línea':'Desconectado');
+      if(online) startGeo(); else stopGeo();
+    }catch(e){ online=!online; toast(e.message,'#ba1a1a'); }
+  }
+
+  function startGeo(){
+    if(!navigator.geolocation) return;
+    geoWatch=navigator.geolocation.watchPosition(p=>{
+      driver.lat=p.coords.latitude; driver.lng=p.coords.longitude;
+      dMarker.setLatLng([driver.lat,driver.lng]);
+      A.driverLocation(driver.lat,driver.lng).catch(()=>{});
+    },()=>{},{enableHighAccuracy:true});
+  }
+  function stopGeo(){ if(geoWatch) navigator.geolocation.clearWatch(geoWatch); }
+
+  // ── Solicitud ──
+  function openReq(){
+    const m=document.getElementById('req-modal'); m.classList.add('open');
+    const bar=document.getElementById('rq-timer'); bar.style.width='100%';
+    setTimeout(()=>bar.style.width='0%',50);
+    reqTimeout=setTimeout(()=>{ rejectReq(); toast('Solicitud expirada'); },15000);
+  }
+  function closeReq(){ document.getElementById('req-modal').classList.remove('open'); clearTimeout(reqTimeout); }
+
+  async function acceptReq(){
+    try{
+      const {trip}=await A.acceptTrip(reqTrip.id);
+      activeTrip=trip; closeReq();
+      socket.emit('join_trip', trip.id);
+      showActiveTrip();
+      drawRoute(trip);
+      toast('✓ Viaje aceptado');
+    }catch(e){ toast(e.message,'#ba1a1a'); closeReq(); }
+  }
+  async function rejectReq(){
+    if(reqTrip) A.rejectTrip(reqTrip.id).catch(()=>{});
+    closeReq(); reqTrip=null;
+  }
+
+  // ── Viaje activo ──
+  function showActiveTrip(){
+    const el=document.getElementById('active-trip'); el.classList.remove('hidden');
+    document.getElementById('at-pasajero').textContent=activeTrip.pasajeroNombre;
+    document.getElementById('at-destino').textContent=activeTrip.destinoNombre;
+    activeTrip._fase=0;
+    document.getElementById('at-action').textContent='Voy en camino';
+  }
+  function drawRoute(trip){
+    if(pickupMarker) map.removeLayer(pickupMarker);
+    if(destMarker) map.removeLayer(destMarker);
+    if(routeLine) map.removeLayer(routeLine);
+    pickupMarker=L.marker([trip.origen.lat,trip.origen.lng],{icon:L.divIcon({className:'',html:'<div class="pickup-marker"></div>',iconSize:[18,18],iconAnchor:[9,9]})}).addTo(map);
+    destMarker=L.marker([trip.destino.lat,trip.destino.lng],{icon:L.divIcon({className:'',html:'<div style="width:30px;height:30px;background:#003820;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,.3)"></div>',iconSize:[30,30],iconAnchor:[15,30]})}).addTo(map);
+    routeLine=L.polyline([[trip.origen.lat,trip.origen.lng],[trip.destino.lat,trip.destino.lng]],{color:'#003820',weight:4,opacity:.8}).addTo(map);
+    map.fitBounds(routeLine.getBounds(),{padding:[60,60]});
+  }
+  async function nextTripState(){
+    const fases=['en_camino','recogido','completado'];
+    const labels=['Voy en camino','Pasajero recogido','Finalizar viaje'];
+    activeTrip._fase++;
+    if(activeTrip._fase > fases.length){ return; }
+    const estado=fases[activeTrip._fase-1];
+    try{
+      await A.tripStatus(activeTrip.id, estado);
+      if(estado==='completado'){
+        toast('✓ Viaje completado · S/ '+(activeTrip.precio*0.8).toFixed(2)+' a tu monedero','#0f8a3c');
+        document.getElementById('active-trip').classList.add('hidden');
+        activeTrip=null;
+        loadEarnings();
+      }else{
+        document.getElementById('at-action').textContent=labels[activeTrip._fase];
+        toast(estado==='en_camino'?'En camino al pasajero':'Pasajero a bordo');
+      }
+    }catch(e){ toast(e.message,'#ba1a1a'); }
+  }
+  async function cancelActive(){
+    if(!confirm('¿Cancelar este viaje?')) return;
+    await A.cancelTrip(activeTrip.id).catch(()=>{});
+    document.getElementById('active-trip').classList.add('hidden');
+    activeTrip=null; toast('Viaje cancelado');
+  }
+
+  // ── Tabs ──
+  function showTab(tab){
+    document.querySelectorAll('.tab-btn').forEach(b=>{
+      b.classList.toggle('text-primary', b.dataset.tab===tab);
+      b.classList.toggle('text-outline', b.dataset.tab!==tab);
+    });
+    const main=document.querySelector('#screen-app main');
+    if(tab==='mapa'){ main.innerHTML='<div id="map"></div>'; setTimeout(()=>initMap(),50); return; }
+    if(tab==='ganancias'){ renderGanancias(main); loadEarnings(); }
+    if(tab==='historial'){ renderHistorial(main); }
+    if(tab==='perfil'){ renderPerfil(main); }
+  }
+
+  let earningsCache=null;
+  async function loadEarnings(){
+    try{ earningsCache=await A.driverEarnings(); if(document.querySelector('[data-tab="ganancias"]').classList.contains('text-primary')) renderGanancias(document.querySelector('#screen-app main')); }catch{}
+  }
+  function renderGanancias(main){
+    const e=earningsCache||{monedero:0,hoy:{viajes:0,ganancia:0},semana:{viajes:0,ganancia:0},total:{viajes:0,ganancia:0},meta:{objetivo:50,actual:0,bono:0}};
+    main.innerHTML=`<div class="p-5 overflow-y-auto w-full bg-background">
+      <div class="bg-primary text-white rounded-2xl p-6 mb-4">
+        <p class="text-primary-fixed-dim text-sm">Monedero disponible</p>
+        <p class="font-head font-bold text-4xl my-1">S/ ${e.monedero.toFixed(2)}</p>
+        <button onclick="retirar()" class="mt-3 bg-white text-primary px-4 py-2 rounded-lg text-sm font-semibold active:scale-95">Retirar</button>
+      </div>
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <div class="bg-white rounded-xl p-4"><p class="text-xs text-outline">Hoy</p><p class="font-head font-bold text-xl text-primary">S/ ${e.hoy.ganancia.toFixed(2)}</p><p class="text-xs text-outline">${e.hoy.viajes} viajes</p></div>
+        <div class="bg-white rounded-xl p-4"><p class="text-xs text-outline">Semana</p><p class="font-head font-bold text-xl text-primary">S/ ${e.semana.ganancia.toFixed(2)}</p><p class="text-xs text-outline">${e.semana.viajes} viajes</p></div>
+      </div>
+      <div class="bg-white rounded-xl p-4 mb-4">
+        <div class="flex justify-between mb-2"><p class="font-semibold text-sm">Meta diaria</p><p class="text-sm text-outline">${e.meta.actual}/${e.meta.objetivo} viajes</p></div>
+        <div class="h-2 bg-surface-container rounded-full overflow-hidden"><div class="h-full bg-success" style="width:${Math.min(100,e.meta.actual/e.meta.objetivo*100)}%"></div></div>
+        <p class="text-xs text-outline mt-2">${e.meta.bono>0?'🎉 ¡Bono S/'+e.meta.bono+' desbloqueado!':'Completa '+e.meta.objetivo+' viajes y gana S/80 de bono'}</p>
+      </div>
+      <div class="bg-white rounded-xl p-4">
+        <p class="font-semibold text-sm mb-1">Total histórico</p>
+        <p class="font-head font-bold text-2xl text-primary">S/ ${e.total.ganancia.toFixed(2)}</p>
+        <p class="text-xs text-outline">${e.total.viajes} viajes completados</p>
+      </div>
+    </div>`;
+  }
+  async function retirar(){
+    const monto=parseFloat(prompt('Monto a retirar (S/):',earningsCache?.monedero||0));
+    if(!monto||monto<=0) return;
+    try{ const r=await A.driverWithdraw(monto); toast('✓ Retiro de S/'+monto+' procesado'); earningsCache.monedero=r.monedero; loadEarnings(); }
+    catch(e){ toast(e.message,'#ba1a1a'); }
+  }
+
+  async function renderHistorial(main){
+    main.innerHTML='<div class="p-5 w-full bg-background overflow-y-auto"><p class="text-center text-outline py-8">Cargando…</p></div>';
+    try{
+      const trips=await A.myTrips();
+      const done=trips.filter(t=>['completado','cancelado'].includes(t.estado));
+      main.innerHTML=`<div class="p-5 w-full bg-background overflow-y-auto">
+        <h2 class="font-head font-bold text-xl text-primary mb-4">Historial</h2>
+        ${done.length===0?'<p class="text-center text-outline py-12">Aún no tienes viajes completados</p>':
+        done.map(t=>`<div class="bg-white rounded-xl p-4 mb-3 flex items-center gap-3">
+          <span class="material-symbols-outlined ${t.estado==='completado'?'text-success':'text-error'}">${t.estado==='completado'?'check_circle':'cancel'}</span>
+          <div class="flex-grow"><p class="font-medium text-sm">${t.destinoNombre}</p><p class="text-xs text-outline">${new Date(t.creado).toLocaleDateString()} · ${t.pasajeroNombre}</p></div>
+          <p class="font-semibold ${t.estado==='completado'?'text-primary':'text-outline'}">S/ ${t.estado==='completado'?(t.precio*0.8).toFixed(2):'0'}</p>
+        </div>`).join('')}
+      </div>`;
+    }catch(e){ main.innerHTML='<p class="p-8 text-center text-error">Error: '+e.message+'</p>'; }
+  }
+
+  function renderPerfil(main){
+    main.innerHTML=`<div class="p-5 w-full bg-background overflow-y-auto flex flex-col gap-4">
+      <div class="bg-white rounded-2xl p-6 flex flex-col items-center gap-2">
+        <img src="/icons/icon-192.png" class="w-20 h-20 rounded-full border-4 border-primary-fixed-dim"/>
+        <h2 class="font-head font-bold text-xl text-primary">${driver.nombre}</h2>
+        <p class="text-sm text-outline">${driver.vehiculo} · ${driver.placa}</p>
+        <div class="flex gap-2 mt-1">
+          <span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1"><span class="material-symbols-outlined text-[14px]" style="font-variation-settings:'FILL' 1">star</span>${driver.rating}</span>
+          <span class="bg-success/10 text-success px-3 py-1 rounded-full text-xs font-medium">${driver.viajesTotal} viajes</span>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl p-4">
+        <p class="font-semibold text-sm mb-3">Documentos</p>
+        ${[['Licencia de conducir',driver.licencia],['SOAT vigente',driver.soat],['Antecedentes',driver.antecedentes],['Verificación facial',driver.docsAprobados]].map(([n,ok])=>`
+          <div class="flex items-center justify-between py-2 border-b border-outline-variant/20 last:border-0">
+            <span class="text-sm">${n}</span>
+            <span class="material-symbols-outlined ${ok?'text-success':'text-error'}">${ok?'verified':'pending'}</span>
+          </div>`).join('')}
+      </div>
+      <button onclick="A.logout();location.reload()" class="bg-white border border-error/30 text-error py-3 rounded-xl font-medium">Cerrar sesión</button>
+    </div>`;
+  }
+
+  // Auto-login si hay token
+  window.addEventListener('DOMContentLoaded',()=>{
+    const saved=localStorage.getItem('pillco_driver');
+    if(A.getToken() && saved){ driver=JSON.parse(saved); enterApp(); }
+  });
+</script>
+</body>
+</html>

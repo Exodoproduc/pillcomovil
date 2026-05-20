@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html class="light" lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Registro / Inicio de Sesión - Pillco Móvil</title>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<meta name="theme-color" content="#003820"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Pillco"/>
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png"/>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"/>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}</script>
+<script src="/shared/config.js"></script>
+<script src="/shared/api.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<style>
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  .pattern-bg {
+    background-color: #f7fafd;
+    background-image: radial-gradient(#00382010 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .glass-sheet {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+  .field-error { border-color: #ba1a1a !important; }
+  .error-msg { color: #ba1a1a; font-size: 12px; margin-top: 4px; display: none; }
+  .error-msg.visible { display: block; }
+
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%,60% { transform: translateX(-6px); }
+    40%,80% { transform: translateX(6px); }
+  }
+  .shake { animation: shake 0.4s ease; }
+
+  #toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-80px);
+    transition: transform 0.35s ease; z-index: 9999;
+    background: #003820; color: #fff; padding: 12px 24px;
+    border-radius: 12px; font-size: 14px; white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  .spinner {
+    display: inline-block; width: 20px; height: 20px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "surface-container-high": "#e5e8ec", "primary": "#003820", "secondary": "#006399",
+          "on-primary-fixed-variant": "#0f5132", "surface-variant": "#e0e3e6",
+          "on-error-container": "#93000a", "on-secondary-container": "#004972",
+          "tertiary": "#482904", "on-secondary": "#ffffff", "surface-container-low": "#f1f4f7",
+          "surface-dim": "#d7dade", "on-primary-fixed": "#002111", "inverse-surface": "#2d3134",
+          "on-surface": "#181c1f", "primary-container": "#0f5132", "tertiary-container": "#623f18",
+          "surface-tint": "#2d6a48", "inverse-on-surface": "#eef1f4", "inverse-primary": "#95d4ac",
+          "background": "#f7fafd", "on-surface-variant": "#404942", "on-primary": "#ffffff",
+          "surface-container-highest": "#e0e3e6", "on-error": "#ffffff", "surface": "#f7fafd",
+          "on-tertiary": "#ffffff", "error": "#ba1a1a", "secondary-container": "#67bafd",
+          "outline": "#707971", "primary-fixed-dim": "#95d4ac", "primary-fixed": "#b0f1c7",
+          "outline-variant": "#c0c9c0", "on-primary-container": "#84c39b",
+          "surface-bright": "#f7fafd", "error-container": "#ffdad6",
+          "surface-container": "#ebeef2", "surface-container-lowest": "#ffffff",
+        },
+        borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px" },
+        spacing: { "stack-sm": "8px", "base": "8px", "gutter": "16px", "container-margin": "20px", "stack-md": "16px", "stack-lg": "24px" },
+        fontFamily: { "label-lg": ["Inter"], "body-md": ["Inter"], "body-sm": ["Inter"], "label-md": ["Inter"], "body-lg": ["Inter"], "headline-sm": ["Montserrat"], "headline-lg": ["Montserrat"], "headline-lg-mobile": ["Montserrat"], "headline-md": ["Montserrat"] },
+        fontSize: {
+          "label-lg": ["14px", { lineHeight: "16px", fontWeight: "600" }],
+          "body-md":  ["16px", { lineHeight: "24px", fontWeight: "400" }],
+          "body-sm":  ["14px", { lineHeight: "20px", fontWeight: "400" }],
+          "label-md": ["12px", { lineHeight: "16px", fontWeight: "500" }],
+          "body-lg":  ["18px", { lineHeight: "28px", fontWeight: "400" }],
+          "headline-sm": ["20px", { lineHeight: "28px", fontWeight: "600" }],
+          "headline-lg": ["32px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700" }],
+          "headline-lg-mobile": ["28px", { lineHeight: "36px", fontWeight: "700" }],
+          "headline-md": ["24px", { lineHeight: "32px", fontWeight: "600" }]
+        }
+      },
+    },
+  }
+</script>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col font-body-md overflow-x-hidden pattern-bg">
+
+<!-- Toast notification -->
+<div id="toast"></div>
+
+<main class="flex-grow flex flex-col items-center justify-center px-container-margin py-stack-lg w-full max-w-md mx-auto relative z-10">
+
+  <!-- Brand Header -->
+  <header class="text-center mb-stack-lg w-full">
+    <a href="../bienvenida_pillco_m_vil/code.html" class="inline-block mb-gutter p-stack-sm bg-surface-container-lowest rounded-xl shadow-sm hover:shadow-md transition-shadow">
+      <img alt="Pillco Móvil Logo" class="w-32 h-auto object-contain mx-auto"
+        src="https://lh3.googleusercontent.com/aida-public/AB6AXuDu_oxbBf0BaMa-0YBtxWOt1BPtdpK0bFIpgsTVg37r4me7gzehbdVDa2NueiHTIWlejOstGg6JfH9kR7-MjAzBLI_WGLAsCN8IZjoDlle7DAWs9hza48RmfsKbdhhEbCKzIHktXF3MfheRrenU6JHcx1fjNvlQMJob_SqZg83TP0l-mhMVhcV8WSkE2k5y6jYfUhsTAEOCPlddpnY3gYAZpw_mUf-vUcf8gEKt4_RkUwQ8aPMQAHSqLzuFrRR8R8KGjMknFNJKkhQ"/>
+    </a>
+    <h1 id="page-title" class="font-headline-lg-mobile text-headline-lg-mobile text-primary tracking-tight mb-2">Comienza tu viaje</h1>
+    <p id="page-subtitle" class="font-body-md text-body-md text-on-surface-variant">Regístrate para moverte seguro por Huánuco</p>
+  </header>
+
+  <!-- Form Container -->
+  <section class="glass-sheet w-full rounded-xl p-gutter shadow-xl flex flex-col gap-stack-md">
+
+    <!-- REGISTRO FORM -->
+    <form id="form-registro" class="flex flex-col gap-stack-md">
+
+      <!-- Nombre -->
+      <div class="relative group">
+        <label class="font-label-md text-label-md text-on-surface-variant mb-1 ml-1 block">Nombre Completo</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">person</span>
+          <input id="reg-nombre" class="w-full bg-surface-container-low border-0 border-b-2 border-outline-variant focus:border-primary focus:ring-0 pl-10 py-3 rounded-t-lg transition-all duration-300 font-body-md text-body-md text-on-surface" placeholder="Ej. Juan Pérez" type="text" autocomplete="name"/>
+        </div>
+        <p class="error-msg" id="err-nombre">Ingresa tu nombre completo</p>
+      </div>
+
+      <!-- Teléfono -->
+      <div class="relative group">
+        <label class="font-label-md text-label-md text-on-surface-variant mb-1 ml-1 block">Número de Teléfono</label>
+        <div class="relative flex gap-2">
+          <div class="bg-surface-container-low border-b-2 border-outline-variant px-3 py-3 rounded-t-lg flex items-center gap-1 font-label-lg text-label-lg text-on-surface select-none">
+            <span>🇵🇪</span><span>+51</span>
+          </div>
+          <div class="relative flex-grow">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">smartphone</span>
+            <input id="reg-tel" class="w-full bg-surface-container-low border-0 border-b-2 border-outline-variant focus:border-primary focus:ring-0 pl-10 py-3 rounded-t-lg transition-all duration-300 font-body-md text-body-md text-on-surface" placeholder="987 654 321" type="tel" maxlength="9" autocomplete="tel"/>
+          </div>
+        </div>
+        <p class="error-msg" id="err-tel">Ingresa un número válido de 9 dígitos</p>
+      </div>
+
+      <!-- Contraseña -->
+      <div class="relative group">
+        <label class="font-label-md text-label-md text-on-surface-variant mb-1 ml-1 block">Contraseña</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">lock</span>
+          <input id="reg-pass" class="w-full bg-surface-container-low border-0 border-b-2 border-outline-variant focus:border-primary focus:ring-0 pl-10 pr-12 py-3 rounded-t-lg transition-all duration-300 font-body-md text-body-md text-on-surface" placeholder="••••••••" type="password" autocomplete="new-password"/>
+          <button id="toggle-pass" class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary transition-colors" type="button">
+            <span class="material-symbols-outlined" id="eye-icon">visibility</span>
+          </button>
+        </div>
+        <p class="font-label-md text-label-md text-outline-variant mt-2 px-1">Mínimo 8 caracteres</p>
+        <p class="error-msg" id="err-pass">La contraseña debe tener al menos 8 caracteres</p>
+      </div>
+
+      <!-- Submit -->
+      <button id="btn-registro" class="w-full bg-primary text-on-primary font-headline-sm text-headline-sm py-4 rounded-xl shadow-lg hover:shadow-primary/20 active:scale-[0.98] transition-all duration-200 mt-stack-sm flex items-center justify-center gap-2" type="submit">
+        <span id="btn-reg-text">Crear Cuenta</span>
+        <span class="material-symbols-outlined" id="btn-reg-icon">arrow_forward</span>
+      </button>
+    </form>
+
+    <!-- LOGIN FORM (oculto por defecto) -->
+    <form id="form-login" class="flex flex-col gap-stack-md hidden">
+
+      <!-- Teléfono login -->
+      <div class="relative group">
+        <label class="font-label-md text-label-md text-on-surface-variant mb-1 ml-1 block">Número de Teléfono</label>
+        <div class="relative flex gap-2">
+          <div class="bg-surface-container-low border-b-2 border-outline-variant px-3 py-3 rounded-t-lg flex items-center gap-1 font-label-lg text-label-lg text-on-surface select-none">
+            <span>🇵🇪</span><span>+51</span>
+          </div>
+          <div class="relative flex-grow">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">smartphone</span>
+            <input id="login-tel" class="w-full bg-surface-container-low border-0 border-b-2 border-outline-variant focus:border-primary focus:ring-0 pl-10 py-3 rounded-t-lg transition-all duration-300 font-body-md text-body-md text-on-surface" placeholder="987 654 321" type="tel" maxlength="9"/>
+          </div>
+        </div>
+        <p class="error-msg" id="err-login-tel">Ingresa un número válido</p>
+      </div>
+
+      <!-- Contraseña login -->
+      <div class="relative group">
+        <label class="font-label-md text-label-md text-on-surface-variant mb-1 ml-1 block">Contraseña</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">lock</span>
+          <input id="login-pass" class="w-full bg-surface-container-low border-0 border-b-2 border-outline-variant focus:border-primary focus:ring-0 pl-10 pr-12 py-3 rounded-t-lg transition-all duration-300 font-body-md text-body-md text-on-surface" placeholder="••••••••" type="password" autocomplete="current-password"/>
+          <button id="toggle-login-pass" class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary transition-colors" type="button">
+            <span class="material-symbols-outlined" id="eye-icon-login">visibility</span>
+          </button>
+        </div>
+        <p class="error-msg" id="err-login-pass">Contraseña incorrecta</p>
+      </div>
+
+      <button id="btn-login" class="w-full bg-primary text-on-primary font-headline-sm text-headline-sm py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all duration-200 mt-stack-sm flex items-center justify-center gap-2" type="submit">
+        <span id="btn-login-text">Ingresar</span>
+        <span class="material-symbols-outlined" id="btn-login-icon">arrow_forward</span>
+      </button>
+    </form>
+
+    <!-- Divider -->
+    <div class="flex items-center gap-gutter my-1">
+      <div class="h-[1px] flex-grow bg-outline-variant/30"></div>
+      <span class="font-label-md text-label-md text-outline">o continúa con</span>
+      <div class="h-[1px] flex-grow bg-outline-variant/30"></div>
+    </div>
+
+    <!-- Google Sign-In real (se renderiza aquí si hay Client ID) -->
+    <div id="g-signin-real" class="w-full flex justify-center min-h-[44px]"></div>
+
+    <!-- Botón demo (fallback si no hay Client ID configurado) -->
+    <button id="g-signin-demo" onclick="googleAuth()" class="w-full bg-surface-container-highest border border-outline-variant/50 text-on-surface font-label-lg text-label-lg py-3 rounded-xl hover:bg-surface-variant transition-colors flex items-center justify-center gap-3 active:scale-[0.98]">
+      <svg class="w-5 h-5" viewBox="0 0 24 24">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      Continuar con Google <span class="text-[10px] text-outline">(demo)</span>
+    </button>
+  </section>
+
+  <!-- Footer toggle -->
+  <footer class="mt-gutter text-center">
+    <p id="footer-toggle" class="font-body-sm text-body-sm text-on-surface-variant">
+      ¿Ya tienes una cuenta?
+      <button onclick="setModo('login')" class="text-secondary font-label-lg text-label-lg ml-1 hover:underline">Inicia Sesión</button>
+    </p>
+    <p class="font-label-md text-label-md text-outline-variant mt-stack-lg max-w-[280px] mx-auto">
+      Al continuar, aceptas nuestros <a class="underline" href="#">Términos</a> y <a class="underline" href="#">Privacidad</a>.
+    </p>
+  </footer>
+</main>
+
+<!-- Kotosh pattern -->
+<div class="fixed bottom-0 left-0 w-full overflow-hidden pointer-events-none opacity-20 select-none">
+  <svg class="w-full h-auto text-primary fill-current" viewBox="0 0 400 100">
+    <path d="M0 100 L40 60 L80 100 L120 60 L160 100 L200 60 L240 100 L280 60 L320 100 L360 60 L400 100 Z" opacity="0.3"/>
+    <path d="M0 100 L20 80 L40 100 L60 80 L80 100 L100 80 L120 100 L140 80 L160 100 L180 80 L200 100 L220 80 L240 100 L260 80 L280 100 L300 80 L320 100 L340 80 L360 100 L380 80 L400 100 Z" opacity="0.1"/>
+  </svg>
+</div>
+
+<script>
+  const MAPA = '../mapa_pillco_m_vil/code.html';
+
+  // ── Detectar modo por URL ──────────────────────────────────────
+  const params = new URLSearchParams(location.search);
+  if (params.get('modo') === 'login') setModo('login');
+
+  function setModo(modo) {
+    const esLogin = modo === 'login';
+    document.getElementById('form-registro').classList.toggle('hidden', esLogin);
+    document.getElementById('form-login').classList.toggle('hidden', !esLogin);
+    document.getElementById('page-title').textContent     = esLogin ? 'Bienvenido de vuelta' : 'Comienza tu viaje';
+    document.getElementById('page-subtitle').textContent  = esLogin ? 'Ingresa para continuar tu viaje' : 'Regístrate para moverte seguro por Huánuco';
+    document.getElementById('footer-toggle').innerHTML    = esLogin
+      ? `¿No tienes cuenta? <button onclick="setModo('registro')" class="text-secondary font-label-lg text-label-lg ml-1 hover:underline">Regístrate</button>`
+      : `¿Ya tienes una cuenta? <button onclick="setModo('login')" class="text-secondary font-label-lg text-label-lg ml-1 hover:underline">Inicia Sesión</button>`;
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────
+  function showToast(msg, color = '#003820') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = color;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  function showError(id, show) {
+    const el = document.getElementById(id);
+    el && el.classList.toggle('visible', show);
+  }
+  function markField(input, error) {
+    input.classList.toggle('field-error', error);
+  }
+
+  // ── Password visibility toggle ────────────────────────────────
+  document.getElementById('toggle-pass').addEventListener('click', () => {
+    const inp  = document.getElementById('reg-pass');
+    const icon = document.getElementById('eye-icon');
+    const show = inp.type === 'password';
+    inp.type   = show ? 'text' : 'password';
+    icon.textContent = show ? 'visibility_off' : 'visibility';
+  });
+  document.getElementById('toggle-login-pass').addEventListener('click', () => {
+    const inp  = document.getElementById('login-pass');
+    const icon = document.getElementById('eye-icon-login');
+    const show = inp.type === 'password';
+    inp.type   = show ? 'text' : 'password';
+    icon.textContent = show ? 'visibility_off' : 'visibility';
+  });
+
+  // Solo números en teléfono
+  ['reg-tel','login-tel'].forEach(id => {
+    document.getElementById(id).addEventListener('input', e => {
+      e.target.value = e.target.value.replace(/\D/g, '');
+    });
+  });
+
+  // ── REGISTRO ──────────────────────────────────────────────────
+  document.getElementById('form-registro').addEventListener('submit', async e => {
+    e.preventDefault();
+    const nombre = document.getElementById('reg-nombre').value.trim();
+    const tel    = document.getElementById('reg-tel').value.trim();
+    const pass   = document.getElementById('reg-pass').value;
+
+    let ok = true;
+    const n = document.getElementById('reg-nombre');
+    const t = document.getElementById('reg-tel');
+    const p = document.getElementById('reg-pass');
+
+    if (nombre.length < 3) { markField(n,true); showError('err-nombre',true); ok=false; } else { markField(n,false); showError('err-nombre',false); }
+    if (!/^\d{9}$/.test(tel)) { markField(t,true); showError('err-tel',true); ok=false; } else { markField(t,false); showError('err-tel',false); }
+    if (pass.length < 8)     { markField(p,true); showError('err-pass',true); ok=false; } else { markField(p,false); showError('err-pass',false); }
+
+    if (!ok) {
+      document.querySelector('section').classList.add('shake');
+      setTimeout(() => document.querySelector('section').classList.remove('shake'), 400);
+      return;
+    }
+
+    setBtnLoading('btn-registro', 'btn-reg-text', 'btn-reg-icon', true);
+
+    // Backend real con fallback a modo demo offline
+    try {
+      const r = await window.PillcoAPI.register({ nombre, tel, password: pass });
+      window.PillcoAPI.setToken(r.token);
+      localStorage.setItem('pillco_user', JSON.stringify(r.user));
+    } catch (err) {
+      await delay(1000);
+      localStorage.setItem('pillco_user', JSON.stringify({ nombre, tel }));
+    }
+    showToast('✓ ¡Cuenta creada! Bienvenido, ' + nombre.split(' ')[0]);
+    await delay(800);
+    window.location.href = MAPA;
+  });
+
+  // ── LOGIN ────────────────────────────────────────────────────
+  document.getElementById('form-login').addEventListener('submit', async e => {
+    e.preventDefault();
+    const tel  = document.getElementById('login-tel').value.trim();
+    const pass = document.getElementById('login-pass').value;
+
+    let ok = true;
+    const t = document.getElementById('login-tel');
+    const p = document.getElementById('login-pass');
+
+    if (!/^\d{9}$/.test(tel)) { markField(t,true); showError('err-login-tel',true); ok=false; } else { markField(t,false); showError('err-login-tel',false); }
+    if (pass.length < 4)      { markField(p,true); showError('err-login-pass',true); ok=false; } else { markField(p,false); showError('err-login-pass',false); }
+
+    if (!ok) {
+      document.querySelector('section').classList.add('shake');
+      setTimeout(() => document.querySelector('section').classList.remove('shake'), 400);
+      return;
+    }
+
+    setBtnLoading('btn-login', 'btn-login-text', 'btn-login-icon', true);
+
+    try {
+      const r = await window.PillcoAPI.login(tel, pass);
+      window.PillcoAPI.setToken(r.token);
+      localStorage.setItem('pillco_user', JSON.stringify(r.user));
+      showToast('✓ Bienvenido de vuelta, ' + (r.user.nombre?.split(' ')[0] || 'Viajero'));
+    } catch (err) {
+      await delay(900);
+      const user = JSON.parse(localStorage.getItem('pillco_user') || '{}');
+      if (user.tel === tel) {
+        showToast('✓ Bienvenido de vuelta, ' + (user.nombre?.split(' ')[0] || 'Viajero'));
+      } else {
+        localStorage.setItem('pillco_user', JSON.stringify({ nombre: 'Viajero', tel }));
+        showToast('✓ Sesión iniciada (modo offline)');
+      }
+    }
+    await delay(700);
+    window.location.href = MAPA;
+  });
+
+  // ── Google Sign-In REAL (Google Identity Services) ────────────
+  function onGoogleCredential(response) {
+    showToast('Verificando con Google...', '#006399');
+    window.PillcoAPI.googleSignIn(response.credential)
+      .then(r => {
+        window.PillcoAPI.setToken(r.token);
+        localStorage.setItem('pillco_user', JSON.stringify(r.user));
+        showToast('✓ Sesión iniciada como ' + r.user.nombre);
+        setTimeout(() => window.location.href = MAPA, 800);
+      })
+      .catch(e => showToast('Error Google: ' + e.message, '#ba1a1a'));
+  }
+
+  function initGoogle() {
+    const cfg = window.PILLCO_CONFIG || {};
+    if (!cfg.googleHabilitado || !window.google?.accounts?.id) return;
+
+    const realBox = document.getElementById('g-signin-real');
+    const demoBtn = document.getElementById('g-signin-demo');
+
+    // Capturar errores de GSI (ej. origen no autorizado) para fallback
+    google.accounts.id.initialize({
+      client_id: cfg.GOOGLE_CLIENT_ID,
+      callback: onGoogleCredential,
+    });
+    demoBtn.style.display = 'none';
+    google.accounts.id.renderButton(realBox, {
+      theme: 'outline', size: 'large', width: 320, text: 'continue_with', locale: 'es',
+    });
+
+    // Si Google no renderizó (origen no autorizado / propagación pendiente),
+    // restaurar el botón demo para no dejar al usuario sin opción.
+    setTimeout(() => {
+      if (!realBox.querySelector('iframe') && !realBox.children.length) {
+        demoBtn.style.display = '';
+        realBox.innerHTML = '<p class="text-[11px] text-outline text-center px-4">⚠️ Google aún no autoriza este dominio (puede tardar unos minutos tras configurar los orígenes). Usa el botón demo mientras tanto.</p>';
+      }
+    }, 2500);
+
+    try { google.accounts.id.prompt(); } catch (_) {}
+  }
+
+  // Esperar a que cargue el SDK de Google (async)
+  window.addEventListener('load', () => {
+    let tries = 0;
+    const iv = setInterval(() => {
+      if (window.google?.accounts?.id || ++tries > 20) {
+        clearInterval(iv);
+        initGoogle();
+      }
+    }, 250);
+  });
+
+  // ── Google Auth DEMO (fallback sin Client ID) ─────────────────
+  async function googleAuth() {
+    showToast('Conectando con Google (demo)...', '#006399');
+    try {
+      const r = await window.PillcoAPI.oauth('google', 'Usuario Google');
+      window.PillcoAPI.setToken(r.token);
+      localStorage.setItem('pillco_user', JSON.stringify(r.user));
+    } catch (err) {
+      await delay(1200);
+      localStorage.setItem('pillco_user', JSON.stringify({ nombre: 'Usuario Google', tel: '999999999' }));
+    }
+    showToast('✓ Sesión iniciada con Google (demo)');
+    await delay(700);
+    window.location.href = MAPA;
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────
+  function setBtnLoading(btnId, textId, iconId, loading) {
+    const btn  = document.getElementById(btnId);
+    const text = document.getElementById(textId);
+    const icon = document.getElementById(iconId);
+    btn.disabled = loading;
+    if (loading) {
+      text.textContent = 'Cargando...';
+      icon.outerHTML = '<span class="spinner" id="' + iconId + '"></span>';
+    }
+  }
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>

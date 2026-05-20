@@ -1,0 +1,29 @@
+# ═════════════════════════════════════════════════════════════
+#  Render Blueprint — Pillco Móvil Backend
+#  Despliega el servidor Express + Socket.IO automáticamente.
+#
+#  Uso:
+#  1. Conecta este repo a Render (New → Blueprint)
+#  2. Render detecta este archivo y crea el servicio
+#  3. Configura las env vars secretas (marcadas con sync: false)
+# ═════════════════════════════════════════════════════════════
+services:
+  - type: web
+    name: pillco-backend
+    runtime: node
+    region: oregon          # más cercano a Sudamérica con free tier
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node index.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: JWT_SECRET
+        generateValue: true            # Render genera uno aleatorio seguro
+      - key: GOOGLE_CLIENT_ID
+        value: "328711529713-3u8ltmi0mcvihsdusspoph7uvbd2sbtt.apps.googleusercontent.com"
+      - key: PORT
+        value: "10000"                 # Render usa este puerto por convención

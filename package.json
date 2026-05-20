@@ -1,0 +1,36 @@
+{
+  "name": "pillco-movil",
+  "version": "1.0.0",
+  "description": "App de movilidad para Huánuco, Perú",
+  "author": "Pillco Móvil",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "serve": "python3 -m http.server 8765",
+    "icons": "python3 generate_icons.py",
+    "cap:init": "npx cap init Pillco com.pillco.movil --web-dir=.",
+    "cap:add:ios": "npx cap add ios",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npx cap sync",
+    "cap:open:ios": "npx cap open ios",
+    "cap:open:android": "npx cap open android",
+    "build:ios": "npx cap sync ios && npx cap open ios",
+    "build:android": "npx cap sync android && npx cap open android"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/geolocation": "^6.0.1",
+    "@capacitor/haptics": "^6.0.1",
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/network": "^6.0.2",
+    "@capacitor/preferences": "^6.0.2",
+    "@capacitor/push-notifications": "^6.0.2",
+    "@capacitor/splash-screen": "^6.0.2",
+    "@capacitor/status-bar": "^6.0.1"
+  }
+}

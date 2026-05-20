@@ -1,0 +1,40 @@
+{
+  "name": "Pillco Móvil",
+  "short_name": "Pillco",
+  "description": "Tu app de movilidad en Huánuco — viajes seguros, conductores verificados, pago con Yape, Plin o efectivo.",
+  "lang": "es-PE",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#003820",
+  "theme_color": "#003820",
+  "categories": ["travel", "navigation", "lifestyle"],
+  "icons": [
+    { "src": "icons/icon-72.png",   "sizes": "72x72",   "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-96.png",   "sizes": "96x96",   "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-128.png",  "sizes": "128x128", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-144.png",  "sizes": "144x144", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-152.png",  "sizes": "152x152", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-192.png",  "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-384.png",  "sizes": "384x384", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png",  "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Solicitar viaje",
+      "short_name": "Viajar",
+      "description": "Solicita un Pillco rápidamente",
+      "url": "/mapa_pillco_m_vil/code.html",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mis viajes",
+      "short_name": "Historial",
+      "description": "Revisa tu historial de viajes",
+      "url": "/mapa_pillco_m_vil/code.html?screen=viajes",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

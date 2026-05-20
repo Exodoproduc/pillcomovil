@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pillco · Panel Administrativo</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="/shared/api.js"></script>
+<script>
+  tailwind.config = { darkMode:"class", theme:{ extend:{ colors:{
+    primary:"#003820", secondary:"#006399", tertiary:"#482904",
+    bg:"#0d1117", panel:"#161b22", panel2:"#1c232b", line:"#2d3640",
+    txt:"#e6edf3", mut:"#8b949e", success:"#3fb950", warn:"#d29922", error:"#f85149",
+    "primary-l":"#2ea043", accent:"#58a6ff",
+  }, fontFamily:{ head:["Montserrat"], body:["Inter"] }}}}
+</script>
+<style>
+  body{font-family:Inter,sans-serif;background:#0d1117;color:#e6edf3}
+  .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400}
+  ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#2d3640;border-radius:4px}
+  .view{display:none}.view.active{display:block}
+  .navlink.active{background:#1c232b;color:#3fb950;border-left:3px solid #3fb950}
+  #toast{position:fixed;top:20px;right:20px;transform:translateX(120%);transition:transform .3s;z-index:999;background:#161b22;border:1px solid #2d3640;color:#e6edf3;padding:12px 20px;border-radius:10px;font-size:14px}
+  #toast.show{transform:translateX(0)}
+  table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 12px;font-size:13px;border-bottom:1px solid #2d3640}th{color:#8b949e;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  tr:hover td{background:#1c232b}
+  .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#3fb950;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes flash{0%{background:#3fb95033}100%{background:transparent}}
+  .flash{animation:flash 1.5s ease}
+</style>
+</head>
+<body class="min-h-screen">
+
+<div id="toast"></div>
+
+<!-- ══════════ LOGIN ══════════ -->
+<div id="login" class="min-h-screen flex items-center justify-center px-6">
+  <div class="w-full max-w-sm">
+    <div class="flex flex-col items-center mb-6">
+      <img src="/icons/icon-192.png" class="w-16 h-16 rounded-2xl mb-3"/>
+      <h1 class="font-head font-bold text-2xl">Pillco Admin</h1>
+      <p class="text-mut text-sm">Panel de control operativo</p>
+    </div>
+    <div class="bg-panel border border-line rounded-2xl p-6 flex flex-col gap-4">
+      <input id="a-user" placeholder="Usuario" class="bg-panel2 border border-line rounded-lg px-4 py-3 text-txt focus:border-success focus:ring-0"/>
+      <input id="a-pass" type="password" placeholder="Contraseña" class="bg-panel2 border border-line rounded-lg px-4 py-3 text-txt focus:border-success focus:ring-0"/>
+      <button onclick="adminLogin()" id="a-btn" class="bg-primary-l text-white py-3 rounded-lg font-semibold active:scale-95 transition-transform">Acceder</button>
+      <p class="text-xs text-center text-mut">Demo: <b>admin</b> / <b>pillco2026</b></p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ DASHBOARD ══════════ -->
+<div id="app" class="hidden">
+<div class="flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="w-60 bg-panel border-r border-line flex flex-col fixed h-full">
+    <div class="p-5 flex items-center gap-3 border-b border-line">
+      <img src="/icons/icon-192.png" class="w-9 h-9 rounded-lg"/>
+      <div><p class="font-head font-bold text-sm">Pillco Admin</p><p class="text-xs text-mut">Huánuco · v1.0</p></div>
+    </div>
+    <nav class="flex-grow py-4">
+      ${''}
+      <a onclick="nav('dashboard')" data-v="dashboard" class="navlink active flex items-center gap-3 px-5 py-3 text-sm cursor-pointer hover:bg-panel2 transition-colors"><span class="material-symbols-outlined text-[20px]">dashboard</span>Dashboard</a>
+      <a onclick="nav('viajes')" data-v="viajes" class="navlink flex items-center gap-3 px-5 py-3 text-sm cursor-pointer hover:bg-panel2 transition-colors text-mut"><span class="material-symbols-outlined text-[20px]">local_taxi</span>Viajes <span id="badge-live" class="ml-auto bg-success/20 text-success text-[10px] px-2 rounded-full">0 live</span></a>
+      <a onclick="nav('conductores')" data-v="conductores" class="navlink flex items-center gap-3 px-5 py-3 text-sm cursor-pointer hover:bg-panel2 transition-colors text-mut"><span class="material-symbols-outlined text-[20px]">badge</span>Conductores</a>
+      <a onclick="nav('usuarios')" data-v="usuarios" class="navlink flex items-center gap-3 px-5 py-3 text-sm cursor-pointer hover:bg-panel2 transition-colors text-mut"><span class="material-symbols-outlined text-[20px]">group</span>Usuarios</a>
+      <a onclick="nav('tarifas')" data-v="tarifas" class="navlink flex items-center gap-3 px-5 py-3 text-sm cursor-pointer hover:bg-panel2 transition-colors text-mut"><span class="material-symbols-outlined text-[20px]">trending_up</span>Tarifas & Zonas</a>
+      <a onclick="nav('promos')" data-v="promos" class="navlink flex items-center gap-3 px-5 py-3 text-sm cursor-pointer hover:bg-panel2 transition-colors text-mut"><span class="material-symbols-outlined text-[20px]">sell</span>Promociones</a>
+      <a onclick="nav('soporte')" data-v="soporte" class="navlink flex items-center gap-3 px-5 py-3 text-sm cursor-pointer hover:bg-panel2 transition-colors text-mut"><span class="material-symbols-outlined text-[20px]">support_agent</span>Soporte</a>
+      <a onclick="nav('logs')" data-v="logs" class="navlink flex items-center gap-3 px-5 py-3 text-sm cursor-pointer hover:bg-panel2 transition-colors text-mut"><span class="material-symbols-outlined text-[20px]">receipt_long</span>Logs & Auditoría</a>
+    </nav>
+    <div class="p-4 border-t border-line">
+      <button onclick="A.logout();location.reload()" class="w-full text-mut text-sm flex items-center gap-2 hover:text-error transition-colors px-1"><span class="material-symbols-outlined text-[18px]">logout</span>Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-grow ml-60 p-8">
+    <!-- DASHBOARD -->
+    <div id="v-dashboard" class="view active">
+      <h1 class="font-head font-bold text-2xl mb-1">Dashboard</h1>
+      <p class="text-mut text-sm mb-6">Métricas en tiempo real · <span id="clock"></span></p>
+      <div id="kpis" class="grid grid-cols-4 gap-4 mb-6"></div>
+      <div class="grid grid-cols-3 gap-4">
+        <div class="col-span-2 bg-panel border border-line rounded-xl p-5">
+          <h3 class="font-semibold mb-4">Viajes recientes</h3>
+          <div id="dash-trips" class="overflow-x-auto"></div>
+        </div>
+        <div class="bg-panel border border-line rounded-xl p-5">
+          <h3 class="font-semibold mb-4">Estado flota</h3>
+          <div id="dash-fleet"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIAJES -->
+    <div id="v-viajes" class="view">
+      <h1 class="font-head font-bold text-2xl mb-6">Viajes</h1>
+      <div class="bg-panel border border-line rounded-xl overflow-hidden"><div id="tbl-trips" class="overflow-x-auto"></div></div>
+    </div>
+
+    <!-- CONDUCTORES -->
+    <div id="v-conductores" class="view">
+      <h1 class="font-head font-bold text-2xl mb-6">Conductores</h1>
+      <div class="bg-panel border border-line rounded-xl overflow-hidden"><div id="tbl-drivers" class="overflow-x-auto"></div></div>
+    </div>
+
+    <!-- USUARIOS -->
+    <div id="v-usuarios" class="view">
+      <h1 class="font-head font-bold text-2xl mb-6">Usuarios pasajeros</h1>
+      <div class="bg-panel border border-line rounded-xl overflow-hidden"><div id="tbl-users" class="overflow-x-auto"></div></div>
+    </div>
+
+    <!-- TARIFAS -->
+    <div id="v-tarifas" class="view">
+      <h1 class="font-head font-bold text-2xl mb-1">Tarifas dinámicas & Zonas</h1>
+      <p class="text-mut text-sm mb-6">Ajusta el surge multiplier por zona de cobertura</p>
+      <div id="zones-grid" class="grid grid-cols-2 gap-4"></div>
+    </div>
+
+    <!-- PROMOS -->
+    <div id="v-promos" class="view">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="font-head font-bold text-2xl">Promociones</h1>
+        <button onclick="newPromo()" class="bg-primary-l text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">add</span>Nueva</button>
+      </div>
+      <div id="promos-grid" class="grid grid-cols-3 gap-4"></div>
+    </div>
+
+    <!-- SOPORTE -->
+    <div id="v-soporte" class="view">
+      <h1 class="font-head font-bold text-2xl mb-6">Tickets de soporte</h1>
+      <div id="tickets-list" class="flex flex-col gap-3"></div>
+    </div>
+
+    <!-- LOGS -->
+    <div id="v-logs" class="view">
+      <h1 class="font-head font-bold text-2xl mb-6">Logs & Auditoría</h1>
+      <div class="bg-panel border border-line rounded-xl p-4"><div id="logs-list" class="font-mono text-xs flex flex-col gap-1 max-h-[70vh] overflow-y-auto"></div></div>
+    </div>
+  </main>
+</div>
+</div>
+
+<script>
+  const A=window.PillcoAPI; let socket;
+  function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000)}
+
+  async function adminLogin(){
+    const u=document.getElementById('a-user').value, p=document.getElementById('a-pass').value;
+    const b=document.getElementById('a-btn'); b.innerHTML='<span class="spinner"></span>'; b.disabled=true;
+    try{ const r=await A.adminLogin(u,p); A.setToken(r.token); enter(); }
+    catch(e){ toast(e.message); b.textContent='Acceder'; b.disabled=false; }
+  }
+
+  function enter(){
+    document.getElementById('login').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    connectSocket(); loadDashboard();
+    setInterval(()=>{ if(document.getElementById('v-dashboard').classList.contains('active')) loadDashboard(); },10000);
+    setInterval(()=>document.getElementById('clock').textContent=new Date().toLocaleTimeString(),1000);
+  }
+
+  function connectSocket(){
+    socket=io(A.base);
+    socket.on('connect',()=>socket.emit('admin_join'));
+    socket.on('trip_update',t=>{ toast('Viaje '+t.estado+': '+t.destinoNombre); loadDashboard(); });
+    socket.on('driver_update',d=>{ if(document.getElementById('v-conductores').classList.contains('active')) loadDrivers(); });
+    socket.on('nuevo_ticket',t=>toast('🎫 Nuevo ticket: '+t.asunto));
+    socket.on('sos_alert',s=>{ toast('🚨 ALERTA SOS — viaje '+s.tripId); alert('🚨 EMERGENCIA SOS\nViaje: '+s.tripId+'\nUbicación: '+s.lat+', '+s.lng); });
+  }
+
+  function nav(v){
+    document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));
+    document.querySelectorAll('.navlink').forEach(e=>{e.classList.remove('active');e.classList.add('text-mut')});
+    document.getElementById('v-'+v).classList.add('active');
+    const link=document.querySelector(`[data-v="${v}"]`); link.classList.add('active'); link.classList.remove('text-mut');
+    ({dashboard:loadDashboard,viajes:loadTrips,conductores:loadDrivers,usuarios:loadUsers,tarifas:loadZones,promos:loadPromos,soporte:loadTickets,logs:loadLogs}[v])();
+  }
+
+  async function loadDashboard(){
+    try{
+      const s=await A.adminStats();
+      document.getElementById('badge-live').textContent=s.viajesActivos+' live';
+      const kpi=(ic,lbl,val,col)=>`<div class="bg-panel border border-line rounded-xl p-5">
+        <div class="flex items-center justify-between mb-2"><span class="material-symbols-outlined ${col}">${ic}</span></div>
+        <p class="font-head font-bold text-2xl">${val}</p><p class="text-mut text-xs">${lbl}</p></div>`;
+      document.getElementById('kpis').innerHTML=
+        kpi('payments','Ingresos totales','S/ '+s.ingresos,'text-success')+
+        kpi('local_taxi','Viajes ('+s.viajesActivos+' activos)',s.viajesTotal,'text-accent')+
+        kpi('group','Usuarios',s.usuarios,'text-warn')+
+        kpi('badge','Conductores ('+s.conductoresOnline+' on)',s.conductores,'text-primary-l');
+      const trips=await A.adminTrips();
+      document.getElementById('dash-trips').innerHTML=tripsTable(trips.slice(0,8));
+      const drv=await A.adminDrivers();
+      document.getElementById('dash-fleet').innerHTML=drv.map(d=>`
+        <div class="flex items-center gap-3 py-2 border-b border-line last:border-0">
+          <span class="w-2 h-2 rounded-full ${d.online?'bg-success':'bg-mut'}"></span>
+          <div class="flex-grow"><p class="text-sm">${d.nombre}</p><p class="text-xs text-mut">${d.vehiculo}</p></div>
+          <span class="text-xs ${d.status==='enviaje'?'text-warn':'text-mut'}">${d.online?(d.status==='enviaje'?'en viaje':'libre'):'offline'}</span>
+        </div>`).join('');
+    }catch(e){ toast('Error: '+e.message); }
+  }
+
+  function tripsTable(trips){
+    const est={buscando:'text-warn',aceptado:'text-accent',en_camino:'text-accent',recogido:'text-accent',completado:'text-success',cancelado:'text-error',sin_conductor:'text-error'};
+    return `<table><thead><tr><th>ID</th><th>Pasajero</th><th>Destino</th><th>Tipo</th><th>Precio</th><th>Surge</th><th>Estado</th></tr></thead><tbody>
+      ${trips.map(t=>`<tr><td class="text-mut">${t.id.slice(-6)}</td><td>${t.pasajeroNombre}</td><td>${t.destinoNombre}</td><td>${t.tipo}</td><td>S/ ${t.precio}</td><td>${t.surge>1?'<span class="text-warn">x'+t.surge+'</span>':'x1'}</td><td class="${est[t.estado]||'text-mut'}">${t.estado}</td></tr>`).join('')||'<tr><td colspan=7 class="text-center text-mut py-6">Sin viajes</td></tr>'}
+    </tbody></table>`;
+  }
+  async function loadTrips(){ document.getElementById('tbl-trips').innerHTML=tripsTable(await A.adminTrips()); }
+
+  async function loadDrivers(){
+    const d=await A.adminDrivers();
+    document.getElementById('tbl-drivers').innerHTML=`<table><thead><tr><th>Conductor</th><th>Vehículo</th><th>Placa</th><th>Rating</th><th>Viajes</th><th>Monedero</th><th>Docs</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
+      ${d.map(x=>`<tr><td>${x.nombre}</td><td>${x.vehiculo}</td><td class="text-mut">${x.placa}</td><td>⭐ ${x.rating}</td><td>${x.viajesTotal}</td><td class="text-success">S/ ${x.monedero.toFixed(2)}</td>
+      <td>${x.docsAprobados?'<span class="text-success">✓ Aprobado</span>':'<span class="text-warn">⏳ Pendiente</span>'}</td>
+      <td><span class="w-2 h-2 rounded-full inline-block ${x.online?'bg-success':'bg-mut'}"></span> ${x.online?'online':'offline'}</td>
+      <td>${x.docsAprobados
+        ?`<button onclick="approve('${x.id}',false)" class="text-error text-xs">Suspender</button>`
+        :`<button onclick="approve('${x.id}',true)" class="bg-primary-l text-white text-xs px-3 py-1 rounded">Aprobar</button>`}</td></tr>`).join('')}
+    </tbody></table>`;
+  }
+  async function approve(id,ok){ await A.approveDriver(id,ok); toast(ok?'Conductor aprobado':'Conductor suspendido'); loadDrivers(); }
+
+  async function loadUsers(){
+    const u=await A.adminUsers();
+    document.getElementById('tbl-users').innerHTML=`<table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Viajes</th><th>Rating</th><th>Registro</th></tr></thead><tbody>
+      ${u.map(x=>`<tr><td>${x.nombre}</td><td class="text-mut">+51 ${x.tel}</td><td>${x.viajesTotal||0}</td><td>⭐ ${x.rating||5}</td><td class="text-mut">${x.creado?new Date(x.creado).toLocaleDateString():'—'}</td></tr>`).join('')||'<tr><td colspan=5 class="text-center text-mut py-6">Sin usuarios aún</td></tr>'}
+    </tbody></table>`;
+  }
+
+  async function loadZones(){
+    const z=await A.adminZones();
+    document.getElementById('zones-grid').innerHTML=z.map(x=>`
+      <div class="bg-panel border border-line rounded-xl p-5">
+        <div class="flex justify-between items-center mb-3"><h3 class="font-semibold">${x.nombre}</h3>
+        <span class="w-2 h-2 rounded-full ${x.activa?'bg-success':'bg-mut'}"></span></div>
+        <p class="text-mut text-xs mb-1">Surge multiplier actual</p>
+        <p class="font-head font-bold text-3xl mb-3 ${x.surge>1?'text-warn':'text-txt'}">x${x.surge}</p>
+        <input type="range" min="1" max="3" step="0.1" value="${x.surge}" oninput="this.nextElementSibling.textContent='x'+this.value" onchange="setSurge('${x.id}',this.value)" class="w-full accent-success"/>
+        <span class="text-xs text-mut">x${x.surge}</span>
+      </div>`).join('');
+  }
+  async function setSurge(id,v){ await A.setSurge(id,v); toast('Surge actualizado a x'+v); }
+
+  async function loadPromos(){
+    const p=await A.adminPromos();
+    document.getElementById('promos-grid').innerHTML=p.map(x=>`
+      <div class="bg-panel border border-line rounded-xl p-5">
+        <div class="flex justify-between items-start mb-2"><span class="font-mono font-bold text-success">${x.codigo}</span>
+        <span class="text-xs ${x.activo?'text-success':'text-mut'}">${x.activo?'activo':'inactivo'}</span></div>
+        <p class="font-head font-bold text-2xl">${(x.desc*100)}% OFF</p>
+        <p class="text-mut text-xs mt-1">${x.usos} usos</p>
+      </div>`).join('');
+  }
+  async function newPromo(){
+    const c=prompt('Código del cupón:'); if(!c) return;
+    const d=parseFloat(prompt('Descuento (0.1 = 10%):','0.15'));
+    await A.createPromo(c,d); toast('Promoción creada'); loadPromos();
+  }
+
+  async function loadTickets(){
+    const t=await A.adminTickets();
+    document.getElementById('tickets-list').innerHTML=t.length?t.map(x=>`
+      <div class="bg-panel border border-line rounded-xl p-4">
+        <div class="flex justify-between mb-1"><p class="font-semibold text-sm">${x.asunto}</p><span class="text-xs px-2 py-0.5 rounded-full bg-warn/20 text-warn">${x.estado}</span></div>
+        <p class="text-sm text-mut mb-2">${x.mensaje}</p>
+        <p class="text-xs text-mut">${x.de} (${x.rol}) · ${new Date(x.creado).toLocaleString()}</p>
+      </div>`).join(''):'<p class="text-mut text-center py-12">Sin tickets abiertos</p>';
+  }
+
+  async function loadLogs(){
+    const l=await A.adminLogs();
+    document.getElementById('logs-list').innerHTML=l.map(x=>`
+      <div class="flex gap-3 py-1 border-b border-line/40"><span class="text-mut">${new Date(x.ts).toLocaleTimeString()}</span><span class="text-accent">[${x.tipo}]</span><span>${x.detalle}</span></div>`).join('');
+  }
+
+  window.addEventListener('DOMContentLoaded',()=>{ if(A.getToken()) enter(); });
+</script>
+</body>
+</html>

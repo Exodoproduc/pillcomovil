@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html class="light" lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Mapa - Pillco Móvil</title>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<meta name="theme-color" content="#003820"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Pillco"/>
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png"/>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"/>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}</script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="/shared/api.js"></script>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700&display=swap" rel="stylesheet"/>
+<!-- Leaflet (mapa real OpenStreetMap) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "surface-container-high": "#e5e8ec", "primary": "#003820", "secondary": "#006399",
+          "on-primary-fixed-variant": "#0f5132", "surface-variant": "#e0e3e6",
+          "tertiary": "#482904", "on-secondary": "#ffffff", "surface-container-low": "#f1f4f7",
+          "inverse-surface": "#2d3134", "on-surface": "#181c1f",
+          "primary-container": "#0f5132", "tertiary-container": "#623f18",
+          "inverse-on-surface": "#eef1f4", "inverse-primary": "#95d4ac",
+          "background": "#f7fafd", "on-surface-variant": "#404942", "on-primary": "#ffffff",
+          "surface-container-highest": "#e0e3e6", "surface": "#f7fafd",
+          "on-tertiary": "#ffffff", "secondary-container": "#67bafd",
+          "outline": "#707971", "primary-fixed-dim": "#95d4ac",
+          "outline-variant": "#c0c9c0", "on-primary-container": "#84c39b",
+          "surface-bright": "#f7fafd", "surface-container": "#ebeef2",
+          "surface-container-lowest": "#ffffff",
+        },
+        borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px" },
+        spacing: { "stack-sm": "8px", "base": "8px", "gutter": "16px", "container-margin": "20px", "stack-md": "16px", "stack-lg": "24px" },
+        fontFamily: { "label-lg": ["Inter"], "body-md": ["Inter"], "body-sm": ["Inter"], "label-md": ["Inter"], "body-lg": ["Inter"], "headline-sm": ["Montserrat"], "headline-lg": ["Montserrat"], "headline-lg-mobile": ["Montserrat"], "headline-md": ["Montserrat"] },
+        fontSize: {
+          "label-lg": ["14px", { lineHeight: "16px", fontWeight: "600" }],
+          "body-md":  ["16px", { lineHeight: "24px", fontWeight: "400" }],
+          "body-sm":  ["14px", { lineHeight: "20px", fontWeight: "400" }],
+          "label-md": ["12px", { lineHeight: "16px", fontWeight: "500" }],
+          "body-lg":  ["18px", { lineHeight: "28px", fontWeight: "400" }],
+          "headline-sm": ["20px", { lineHeight: "28px", fontWeight: "600" }],
+          "headline-lg": ["32px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700" }],
+          "headline-lg-mobile": ["28px", { lineHeight: "36px", fontWeight: "700" }],
+          "headline-md": ["24px", { lineHeight: "32px", fontWeight: "600" }]
+        }
+      },
+    },
+  }
+</script>
+<style>
+  .material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  }
+  #leaflet-map { width: 100%; height: 100%; z-index: 1; background: #e6e8eb; }
+  .leaflet-control-attribution { font-size: 9px !important; }
+
+  /* Estilo de markers personalizados */
+  .car-marker {
+    width: 36px; height: 36px;
+    background: #003820; color: #fff;
+    border-radius: 50%; border: 3px solid #fff;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    font-family: 'Material Symbols Outlined';
+    font-size: 20px;
+  }
+  .car-marker.tertiary { background: #482904; }
+  .user-marker {
+    width: 18px; height: 18px;
+    background: #006399;
+    border-radius: 50%; border: 3px solid #fff;
+    box-shadow: 0 0 0 6px rgba(0,99,153,0.25);
+    animation: pulseUser 2s ease-in-out infinite;
+  }
+  @keyframes pulseUser {
+    0%,100% { box-shadow: 0 0 0 6px rgba(0,99,153,0.25); }
+    50%     { box-shadow: 0 0 0 12px rgba(0,99,153,0.1); }
+  }
+  .destino-marker {
+    width: 36px; height: 36px;
+    background: #ba1a1a; color: #fff;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    border: 3px solid #fff;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .destino-marker span { transform: rotate(45deg); font-size: 18px; }
+
+  /* Loading spinner inline */
+  .inline-spinner {
+    width: 18px; height: 18px;
+    border: 2px solid #c0c9c0;
+    border-top-color: #003820;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
+  .custom-shadow-primary { box-shadow: 0 8px 30px rgba(0,56,32,0.15); }
+  body { min-height: max(884px, 100dvh); }
+
+  /* Destino modal overlay */
+  #destino-modal {
+    transition: opacity 0.25s, transform 0.25s;
+    opacity: 0; transform: translateY(20px); pointer-events: none;
+  }
+  #destino-modal.open { opacity: 1; transform: translateY(0); pointer-events: all; }
+
+  /* Ride option selection */
+  .ride-option { transition: all 0.2s; }
+  .ride-option.selected {
+    border-color: #003820 !important;
+    background: rgba(0,56,32,0.07) !important;
+  }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block; width: 22px; height: 22px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toast */
+  #toast {
+    position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-80px);
+    transition: transform 0.3s; z-index: 999;
+    background: #003820; color: #fff; padding: 10px 20px;
+    border-radius: 10px; font-size: 13px; white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Menú lateral */
+  #sidebar {
+    transition: transform 0.3s ease;
+    transform: translateX(-100%);
+  }
+  #sidebar.open { transform: translateX(0); }
+  #sidebar-overlay {
+    opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  }
+  #sidebar-overlay.open { opacity: 1; pointer-events: all; }
+</style>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-hidden h-screen flex flex-col">
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Sidebar overlay -->
+<div id="sidebar-overlay" class="fixed inset-0 bg-black/40 z-40" onclick="closeSidebar()"></div>
+
+<!-- Sidebar -->
+<aside id="sidebar" class="fixed left-0 top-0 h-full w-72 bg-surface-container-lowest z-50 shadow-2xl flex flex-col">
+  <div class="bg-primary p-6 flex items-center gap-4">
+    <div class="w-14 h-14 rounded-full bg-primary-container overflow-hidden flex-shrink-0">
+      <img alt="Avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-UaJkm5cw7Ns6us86a8I9SXhWSJfhsQvU4oImPlSOqYUhqzK-B5QR88iq6tj1C4sZbMWkHxaFQIQQbp6pIGBKA_4KvqLPtDLTM76ZV-FS5-J03TRAkkszp_XODdPM_ijfP4x8n4BRVI_jiBoWshLFQ5sDAGQWb_3yahw4O_euX59CwU7X-0lUYAn9uVBRafGETw7exwC8SuXJR9NVqUeRmQ_7vvJNsldTveRrLnKWzCpAYgu8Aq2_dG6QZuf7Rnahy8NddgkMOVo" class="w-full h-full object-cover"/>
+    </div>
+    <div>
+      <p id="sidebar-name" class="font-headline-sm text-headline-sm text-on-primary">Viajero</p>
+      <p class="font-label-md text-label-md text-primary-fixed-dim">Huánuco, Perú 🇵🇪</p>
+    </div>
+  </div>
+  <nav class="flex flex-col p-4 gap-1 flex-grow">
+    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/10 text-primary font-label-lg text-label-lg">
+      <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">directions_car</span> Viajar
+    </a>
+    <button onclick="closeSidebar(); openScreen('viajes')" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-surface-container text-on-surface-variant font-label-lg text-label-lg text-left">
+      <span class="material-symbols-outlined">history</span> Mis Viajes
+    </button>
+    <button onclick="closeSidebar(); openScreen('pagos')" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-surface-container text-on-surface-variant font-label-lg text-label-lg text-left">
+      <span class="material-symbols-outlined">payments</span> Pagos
+    </button>
+    <button onclick="closeSidebar(); openScreen('promos')" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-surface-container text-on-surface-variant font-label-lg text-label-lg text-left">
+      <span class="material-symbols-outlined">local_offer</span> Promociones
+    </button>
+    <button onclick="closeSidebar(); openScreen('ayuda')" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-surface-container text-on-surface-variant font-label-lg text-label-lg text-left">
+      <span class="material-symbols-outlined">help</span> Ayuda
+    </button>
+    <button onclick="closeSidebar(); openScreen('perfil')" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-surface-container text-on-surface-variant font-label-lg text-label-lg text-left">
+      <span class="material-symbols-outlined">person</span> Perfil
+    </button>
+    <div class="mt-auto">
+      <a href="../bienvenida_pillco_m_vil/code.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-error/10 text-outline font-label-lg text-label-lg" onclick="localStorage.removeItem('pillco_user')">
+        <span class="material-symbols-outlined">logout</span> Cerrar Sesión
+      </a>
+    </div>
+  </nav>
+</aside>
+
+<!-- TopAppBar -->
+<header class="bg-surface/90 backdrop-blur-md text-primary font-headline-sm shadow-sm flex items-center justify-between px-container-margin py-4 w-full sticky top-0 z-30">
+  <button onclick="openSidebar()" class="p-2 transition-all hover:bg-surface-container-low rounded-full active:scale-90">
+    <span class="material-symbols-outlined">menu</span>
+  </button>
+  <div class="font-headline-md text-headline-md text-primary tracking-tight">Pillco Móvil</div>
+  <div class="w-10 h-10 rounded-full border-2 border-primary-container overflow-hidden cursor-pointer" onclick="openSidebar()">
+    <img alt="Profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-UaJkm5cw7Ns6us86a8I9SXhWSJfhsQvU4oImPlSOqYUhqzK-B5QR88iq6tj1C4sZbMWkHxaFQIQQbp6pIGBKA_4KvqLPtDLTM76ZV-FS5-J03TRAkkszp_XODdPM_ijfP4x8n4BRVI_jiBoWshLFQ5sDAGQWb_3yahw4O_euX59CwU7X-0lUYAn9uVBRafGETw7exwC8SuXJR9NVqUeRmQ_7vvJNsldTveRrLnKWzCpAYgu8Aq2_dG6QZuf7Rnahy8NddgkMOVo"/>
+  </div>
+</header>
+
+<!-- Main Map Canvas -->
+<main class="relative flex-grow overflow-hidden">
+
+  <!-- Mapa real OpenStreetMap -->
+  <div class="absolute inset-0">
+    <div id="leaflet-map"></div>
+  </div>
+
+  <!-- Botón mi ubicación -->
+  <button onclick="centrarEnMiUbicacion()"
+    class="absolute top-[170px] right-container-margin z-20 w-12 h-12 bg-surface-container-lowest text-primary rounded-full shadow-lg flex items-center justify-center active:scale-90 transition-transform">
+    <span class="material-symbols-outlined">my_location</span>
+  </button>
+
+  <!-- Floating Search Bar -->
+  <div class="absolute top-4 left-container-margin right-container-margin z-20">
+    <button onclick="openDestinoModal()" class="w-full bg-surface-container-lowest custom-shadow-primary rounded-xl p-3 flex items-center gap-3 border border-outline-variant/30 text-left active:scale-[0.98] transition-transform">
+      <div class="flex flex-col items-center gap-1">
+        <div class="w-2 h-2 rounded-full bg-secondary"></div>
+        <div class="w-0.5 h-6 bg-outline-variant"></div>
+        <div class="w-2 h-2 bg-primary rounded-sm"></div>
+      </div>
+      <div class="flex-grow">
+        <div class="text-label-md font-label-md text-on-surface-variant mb-1">Recojo actual</div>
+        <div class="text-body-md font-body-md text-on-surface truncate" id="pickup-label">Plaza de Armas de Huánuco</div>
+        <div class="h-[1px] bg-outline-variant/30 my-2"></div>
+        <div class="text-body-md font-headline-sm text-outline" id="destino-label">¿A dónde vamos?</div>
+      </div>
+      <div class="bg-surface-container-low p-2 rounded-full text-secondary">
+        <span class="material-symbols-outlined">search</span>
+      </div>
+    </button>
+  </div>
+
+  <!-- Bottom Sheet -->
+  <div class="absolute bottom-0 left-0 right-0 z-20 bg-surface-container-lowest rounded-t-3xl shadow-[0_-8px_40px_rgba(0,0,0,0.1)] p-stack-lg flex flex-col gap-gutter pb-20">
+    <div class="w-12 h-1.5 bg-outline-variant rounded-full mx-auto -mt-2 mb-2"></div>
+    <div class="flex justify-between items-center">
+      <h2 class="font-headline-md text-headline-md text-primary">Elige tu viaje</h2>
+      <button id="pago-chip" onclick="openScreen('pagos')"
+        class="text-label-md font-label-md bg-secondary-container/20 text-secondary px-3 py-1 rounded-full flex items-center gap-1 active:scale-95 transition-transform">
+        <span class="material-symbols-outlined text-[14px]" id="pago-icon">payments</span> <span id="pago-text">Efectivo</span>
+      </button>
+    </div>
+
+    <!-- Ride options -->
+    <div class="grid grid-cols-2 gap-stack-md">
+      <button id="opt-basico" onclick="selectRide('basico')"
+        class="ride-option selected flex flex-col p-stack-md bg-primary/5 border-2 border-primary rounded-xl text-left active:scale-95">
+        <div class="flex justify-between items-start mb-2">
+          <span class="material-symbols-outlined text-primary text-[32px]" style="font-variation-settings:'FILL' 1">directions_car</span>
+          <span class="text-label-lg font-label-lg text-primary">S/ 6.50</span>
+        </div>
+        <div class="font-label-lg text-label-lg text-primary">Pillco Básico</div>
+        <div class="text-label-md font-label-md text-on-surface-variant">3 min · Viaje local</div>
+      </button>
+
+      <button id="opt-premium" onclick="selectRide('premium')"
+        class="ride-option flex flex-col p-stack-md bg-surface border border-outline-variant/30 rounded-xl text-left active:scale-95">
+        <div class="flex justify-between items-start mb-2">
+          <span class="material-symbols-outlined text-secondary text-[32px]" style="font-variation-settings:'FILL' 1">airport_shuttle</span>
+          <span class="text-label-lg font-label-lg text-on-surface">S/ 9.50</span>
+        </div>
+        <div class="font-label-lg text-label-lg text-on-surface">Pillco Premium</div>
+        <div class="text-label-md font-label-md text-on-surface-variant">5 min · Aire acond.</div>
+      </button>
+    </div>
+
+    <!-- Promo -->
+    <div class="bg-surface-container p-stack-md rounded-xl flex items-center gap-4">
+      <div class="bg-tertiary-container/20 p-2 rounded-lg text-tertiary">
+        <span class="material-symbols-outlined">local_offer</span>
+      </div>
+      <div class="flex-grow">
+        <div class="text-label-lg font-label-lg">Descuento Festivo</div>
+        <div class="text-label-md font-label-md text-on-surface-variant">15% menos en tu primer viaje de hoy.</div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <button id="btn-solicitar" onclick="solicitarViaje()"
+      class="bg-primary text-on-primary font-headline-sm text-headline-sm py-4 rounded-xl custom-shadow-primary active:scale-[0.98] transition-transform flex items-center justify-center gap-2">
+      <span id="btn-text">Solicitar Pillco Básico</span>
+    </button>
+  </div>
+
+  <!-- Safety FAB -->
+  <button onclick="showToast('Centro de Seguridad Pillco 24/7','#482904')"
+    class="absolute bottom-[38%] right-container-margin z-10 bg-tertiary text-on-tertiary w-14 h-14 rounded-full shadow-lg flex items-center justify-center active:scale-90 transition-transform">
+    <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">shield</span>
+  </button>
+</main>
+
+<!-- Destino modal -->
+<div id="destino-modal" class="fixed inset-0 z-50 flex flex-col justify-end">
+  <div class="absolute inset-0 bg-black/40" onclick="closeDestinoModal()"></div>
+  <div class="relative bg-surface-container-lowest rounded-t-3xl p-6 flex flex-col gap-4 shadow-2xl max-h-[80vh]">
+    <div class="w-12 h-1.5 bg-outline-variant rounded-full mx-auto"></div>
+    <h3 class="font-headline-md text-headline-md text-primary">¿A dónde vamos?</h3>
+
+    <div class="relative">
+      <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+      <input id="destino-input" type="text" placeholder="Busca cualquier dirección en Huánuco..."
+        class="w-full bg-surface-container-low border border-outline-variant focus:border-primary focus:ring-0 pl-10 pr-10 py-3 rounded-xl font-body-md text-body-md text-on-surface"
+        oninput="onDestinoInput(this.value)" autocomplete="off"/>
+      <div id="search-spinner" class="absolute right-3 top-1/2 -translate-y-1/2 hidden">
+        <span class="inline-spinner"></span>
+      </div>
+    </div>
+
+    <p class="text-label-md text-outline" id="destinos-header">Destinos populares en Huánuco</p>
+    <ul id="destinos-list" class="flex flex-col gap-2 max-h-72 overflow-y-auto"></ul>
+  </div>
+</div>
+
+<!-- Bottom Nav -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 py-3 bg-surface-container-lowest border-t border-outline-variant/30 z-30">
+  <a class="flex flex-col items-center gap-1 bg-primary-container/20 text-primary rounded-xl px-3 py-1.5">
+    <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">directions_car</span>
+    <span class="font-label-md text-label-md">Viajar</span>
+  </a>
+  <button onclick="openScreen('viajes')" class="flex flex-col items-center gap-1 text-on-surface-variant px-3 py-1.5 active:scale-90 transition-transform">
+    <span class="material-symbols-outlined">history</span>
+    <span class="font-label-md text-label-md">Actividad</span>
+  </button>
+  <button onclick="openScreen('mensajes')" class="flex flex-col items-center gap-1 text-on-surface-variant px-3 py-1.5 active:scale-90 transition-transform">
+    <span class="material-symbols-outlined">chat_bubble</span>
+    <span class="font-label-md text-label-md">Mensajes</span>
+  </button>
+  <button onclick="openScreen('perfil')" class="flex flex-col items-center gap-1 text-on-surface-variant px-3 py-1.5 active:scale-90 transition-transform">
+    <span class="material-symbols-outlined">person</span>
+    <span class="font-label-md text-label-md">Perfil</span>
+  </button>
+</nav>
+
+<!-- ═══════════════ SCREEN MODALS ═══════════════ -->
+<style>
+  .screen {
+    position: fixed; inset: 0; z-index: 60;
+    background: #f7fafd;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .screen.open { transform: translateX(0); }
+  .screen-header {
+    background: #003820; color: #fff;
+    padding: 16px 20px;
+    display: flex; align-items: center; gap: 12px;
+    flex-shrink: 0;
+  }
+  .screen-body { flex-grow: 1; overflow-y: auto; padding: 20px; }
+</style>
+
+<!-- Mis Viajes -->
+<div id="screen-viajes" class="screen">
+  <div class="screen-header">
+    <button onclick="closeScreen('viajes')" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center active:scale-90">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </button>
+    <h2 class="font-headline-md text-headline-md">Mis Viajes</h2>
+  </div>
+  <div class="screen-body" id="viajes-list"></div>
+</div>
+
+<!-- Pagos -->
+<div id="screen-pagos" class="screen">
+  <div class="screen-header">
+    <button onclick="closeScreen('pagos')" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center active:scale-90">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </button>
+    <h2 class="font-headline-md text-headline-md">Métodos de Pago</h2>
+  </div>
+  <div class="screen-body">
+    <p class="font-label-md text-label-md text-outline mb-3 uppercase tracking-wider">Selecciona uno</p>
+    <div class="flex flex-col gap-3" id="pagos-list"></div>
+
+    <p class="font-label-md text-label-md text-outline mt-8 mb-3 uppercase tracking-wider">Agregar nuevo</p>
+    <button onclick="addPaymentMethod()" class="w-full bg-white border-2 border-dashed border-primary/40 text-primary py-4 rounded-xl font-label-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+      <span class="material-symbols-outlined">add_card</span> Agregar tarjeta o cuenta
+    </button>
+
+    <div class="mt-8 bg-secondary-container/20 p-4 rounded-xl flex items-start gap-3">
+      <span class="material-symbols-outlined text-secondary">shield</span>
+      <p class="text-label-md text-on-surface-variant">Todos los pagos están protegidos y encriptados de extremo a extremo. Pillco nunca almacena tu CVV.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Promociones -->
+<div id="screen-promos" class="screen">
+  <div class="screen-header">
+    <button onclick="closeScreen('promos')" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center active:scale-90">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </button>
+    <h2 class="font-headline-md text-headline-md">Promociones</h2>
+  </div>
+  <div class="screen-body">
+    <!-- Código input -->
+    <div class="bg-white rounded-xl p-4 mb-4 shadow-sm">
+      <label class="font-label-md text-label-md text-outline block mb-2">Aplicar código de promoción</label>
+      <div class="flex gap-2">
+        <input id="promo-input" type="text" placeholder="Ej. HUANUCO15"
+          class="flex-grow bg-surface-container-low border border-outline-variant focus:border-primary focus:ring-0 px-4 py-2.5 rounded-lg uppercase font-label-lg text-label-lg"/>
+        <button onclick="aplicarPromo()" class="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-label-lg active:scale-95 transition-transform">
+          Aplicar
+        </button>
+      </div>
+    </div>
+
+    <p class="font-label-md text-label-md text-outline mb-3 uppercase tracking-wider">Disponibles para ti</p>
+    <div class="flex flex-col gap-3" id="promos-list"></div>
+  </div>
+</div>
+
+<!-- Ayuda -->
+<div id="screen-ayuda" class="screen">
+  <div class="screen-header">
+    <button onclick="closeScreen('ayuda')" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center active:scale-90">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </button>
+    <h2 class="font-headline-md text-headline-md">Centro de Ayuda</h2>
+  </div>
+  <div class="screen-body">
+    <!-- Contacto rápido -->
+    <div class="grid grid-cols-3 gap-2 mb-6">
+      <button onclick="showToast('Llamando al 0800-PILLCO...','#006399')" class="flex flex-col items-center gap-2 p-4 bg-white rounded-xl shadow-sm active:scale-95 transition-transform">
+        <div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center">
+          <span class="material-symbols-outlined text-secondary">call</span>
+        </div>
+        <span class="font-label-md text-label-md text-on-surface text-center">Llamar</span>
+      </button>
+      <button onclick="showToast('Abriendo chat con soporte...','#003820')" class="flex flex-col items-center gap-2 p-4 bg-white rounded-xl shadow-sm active:scale-95 transition-transform">
+        <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+          <span class="material-symbols-outlined text-primary">chat</span>
+        </div>
+        <span class="font-label-md text-label-md text-on-surface text-center">Chat 24/7</span>
+      </button>
+      <button onclick="showToast('Reportando emergencia...','#ba1a1a')" class="flex flex-col items-center gap-2 p-4 bg-white rounded-xl shadow-sm active:scale-95 transition-transform">
+        <div class="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center">
+          <span class="material-symbols-outlined text-error">emergency</span>
+        </div>
+        <span class="font-label-md text-label-md text-on-surface text-center">SOS</span>
+      </button>
+    </div>
+
+    <p class="font-label-md text-label-md text-outline mb-3 uppercase tracking-wider">Preguntas frecuentes</p>
+    <div class="flex flex-col gap-2" id="faq-list"></div>
+  </div>
+</div>
+
+<!-- Perfil -->
+<div id="screen-perfil" class="screen">
+  <div class="screen-header">
+    <button onclick="closeScreen('perfil')" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center active:scale-90">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </button>
+    <h2 class="font-headline-md text-headline-md">Mi Perfil</h2>
+  </div>
+  <div class="screen-body">
+    <div class="bg-white rounded-2xl p-6 flex flex-col items-center gap-3 mb-4 shadow-sm">
+      <div class="w-24 h-24 rounded-full border-4 border-primary-fixed-dim overflow-hidden">
+        <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-UaJkm5cw7Ns6us86a8I9SXhWSJfhsQvU4oImPlSOqYUhqzK-B5QR88iq6tj1C4sZbMWkHxaFQIQQbp6pIGBKA_4KvqLPtDLTM76ZV-FS5-J03TRAkkszp_XODdPM_ijfP4x8n4BRVI_jiBoWshLFQ5sDAGQWb_3yahw4O_euX59CwU7X-0lUYAn9uVBRafGETw7exwC8SuXJR9NVqUeRmQ_7vvJNsldTveRrLnKWzCpAYgu8Aq2_dG6QZuf7Rnahy8NddgkMOVo" class="w-full h-full object-cover"/>
+      </div>
+      <h3 id="perfil-name" class="font-headline-md text-headline-md text-primary">Viajero</h3>
+      <p id="perfil-tel" class="font-body-sm text-on-surface-variant">+51 ---</p>
+      <div class="flex gap-2 mt-2">
+        <span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-label-md font-label-md flex items-center gap-1">
+          <span class="material-symbols-outlined text-[14px]">verified</span> Verificado
+        </span>
+        <span class="bg-tertiary/10 text-tertiary px-3 py-1 rounded-full text-label-md font-label-md flex items-center gap-1">
+          <span class="material-symbols-outlined text-[14px]" style="font-variation-settings:'FILL' 1">star</span> 4.9
+        </span>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-3 gap-2 mb-6">
+      <div class="bg-white p-4 rounded-xl text-center shadow-sm">
+        <p id="stat-viajes" class="font-headline-md text-primary">0</p>
+        <p class="text-label-md text-outline">Viajes</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl text-center shadow-sm">
+        <p id="stat-gasto" class="font-headline-md text-primary">S/0</p>
+        <p class="text-label-md text-outline">Gasto total</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl text-center shadow-sm">
+        <p class="font-headline-md text-primary">2026</p>
+        <p class="text-label-md text-outline">Miembro</p>
+      </div>
+    </div>
+
+    <!-- Opciones -->
+    <div class="flex flex-col gap-2">
+      <button onclick="editProfile()" class="w-full bg-white p-4 rounded-xl flex items-center gap-3 active:scale-[0.98] shadow-sm">
+        <span class="material-symbols-outlined text-primary">edit</span>
+        <span class="flex-grow text-left font-label-lg">Editar perfil</span>
+        <span class="material-symbols-outlined text-outline">chevron_right</span>
+      </button>
+      <button onclick="showToast('Notificaciones activadas','#003820')" class="w-full bg-white p-4 rounded-xl flex items-center gap-3 active:scale-[0.98] shadow-sm">
+        <span class="material-symbols-outlined text-primary">notifications</span>
+        <span class="flex-grow text-left font-label-lg">Notificaciones</span>
+        <span class="material-symbols-outlined text-outline">chevron_right</span>
+      </button>
+      <button onclick="closeScreen('perfil'); openScreen('pagos')" class="w-full bg-white p-4 rounded-xl flex items-center gap-3 active:scale-[0.98] shadow-sm">
+        <span class="material-symbols-outlined text-primary">payments</span>
+        <span class="flex-grow text-left font-label-lg">Métodos de pago</span>
+        <span class="material-symbols-outlined text-outline">chevron_right</span>
+      </button>
+      <button onclick="showToast('Idioma: Español 🇵🇪','#003820')" class="w-full bg-white p-4 rounded-xl flex items-center gap-3 active:scale-[0.98] shadow-sm">
+        <span class="material-symbols-outlined text-primary">language</span>
+        <span class="flex-grow text-left font-label-lg">Idioma</span>
+        <span class="font-label-md text-outline">Español</span>
+      </button>
+      <a href="../bienvenida_pillco_m_vil/code.html" onclick="localStorage.removeItem('pillco_user')" class="w-full bg-white p-4 rounded-xl flex items-center gap-3 active:scale-[0.98] shadow-sm mt-4 border border-error/30">
+        <span class="material-symbols-outlined text-error">logout</span>
+        <span class="flex-grow text-left font-label-lg text-error">Cerrar sesión</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Mensajes -->
+<div id="screen-mensajes" class="screen">
+  <div class="screen-header">
+    <button onclick="closeScreen('mensajes')" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center active:scale-90">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </button>
+    <h2 class="font-headline-md text-headline-md">Mensajes</h2>
+  </div>
+  <div class="screen-body">
+    <div class="bg-white rounded-xl p-4 flex flex-col gap-3" id="mensajes-list"></div>
+  </div>
+</div>
+
+<script>
+  const DESTINOS = '../detalles_del_viaje_pillco_m_vil/code.html';
+
+  // ── Pagos disponibles ─────────────────────────────────────────
+  const METODOS_PAGO = [
+    { id: 'efectivo', nombre: 'Efectivo', detalle: 'Paga al conductor', icon: 'payments',   color: '#006399' },
+    { id: 'yape',     nombre: 'Yape',     detalle: '987 654 ***',       icon: 'qr_code_2',  color: '#9b1c83' },
+    { id: 'plin',     nombre: 'Plin',     detalle: '987 654 ***',       icon: 'qr_code_2',  color: '#00b7c4' },
+    { id: 'visa',     nombre: 'Visa',     detalle: '•••• •••• •••• 4521', icon: 'credit_card', color: '#1a1f71' },
+    { id: 'bcp',      nombre: 'BCP',      detalle: 'Cuenta •••12345',   icon: 'account_balance', color: '#002b7f' },
+  ];
+
+  // ── Promos ────────────────────────────────────────────────────
+  const PROMOS = [
+    { codigo: 'HUANUCO15',     titulo: '15% en tu primer viaje',   detalle: 'Válido hasta 30/06/2026', tag: 'Nuevo', tagColor: '#003820' },
+    { codigo: 'LUNES50',       titulo: '50% los lunes',            detalle: 'Hasta S/5 de descuento',  tag: 'Hoy',   tagColor: '#ba1a1a' },
+    { codigo: 'AEROPUERTO',    titulo: 'S/3 menos al aeropuerto',  detalle: 'Viajes al Alférez FAP',   tag: 'Popular', tagColor: '#482904' },
+    { codigo: 'PILLCOPLUS',    titulo: '20% en Pillco Premium',    detalle: 'Todos los días',          tag: 'Premium', tagColor: '#006399' },
+    { codigo: 'AMIGO',         titulo: 'Invita y gana S/5',        detalle: 'Por cada amigo nuevo',    tag: '',      tagColor: '' },
+  ];
+
+  // ── FAQ ───────────────────────────────────────────────────────
+  const FAQS = [
+    { q: '¿Cómo solicito un viaje?',              a: 'Toca "¿A dónde vamos?", elige tu destino y luego toca "Solicitar Pillco Básico" o Premium.' },
+    { q: '¿Cómo cancelo un viaje?',                a: 'En la pantalla de Detalles del Viaje, toca el botón "Cancelar viaje" en la parte inferior.' },
+    { q: '¿Cómo pago mi viaje?',                   a: 'Puedes pagar en Efectivo, con Yape, Plin, tarjeta Visa o BCP. Selecciona el método antes de solicitar.' },
+    { q: '¿Qué hago en caso de emergencia?',       a: 'Toca el botón naranja con escudo en cualquier pantalla — tu ubicación se compartirá con nuestro equipo 24/7.' },
+    { q: '¿Cómo califico al conductor?',           a: 'Al finalizar tu viaje aparecerá automáticamente una pantalla para calificar de 1 a 5 estrellas.' },
+    { q: '¿Mis datos están seguros?',              a: 'Sí. Todos los datos están encriptados y nunca compartimos tu información con terceros.' },
+  ];
+
+  let metodoPagoActual = 'efectivo';
+
+  // Destinos populares con coordenadas reales de Huánuco, Perú
+  const destinos = [
+    { nombre: 'Laguna Viña del Río',                  lat: -9.9519, lng: -76.2461 },
+    { nombre: 'Mercado Modelo de Huánuco',            lat: -9.9326, lng: -76.2422 },
+    { nombre: 'Hospital Regional Hermilio Valdizán',  lat: -9.9410, lng: -76.2390 },
+    { nombre: 'Universidad Nacional Hermilio Valdizán', lat: -9.9489, lng: -76.2419 },
+    { nombre: 'Aeropuerto Alférez FAP David Figueroa', lat: -9.8786, lng: -76.2222 },
+    { nombre: 'Puente Calicanto',                     lat: -9.9293, lng: -76.2401 },
+    { nombre: 'Kotosh - Templo de las Manos Cruzadas', lat: -9.9583, lng: -76.2825 },
+    { nombre: 'Terminal Terrestre de Huánuco',        lat: -9.9404, lng: -76.2456 },
+    { nombre: 'Centro Comercial Real Plaza Huánuco',  lat: -9.9320, lng: -76.2335 },
+    { nombre: 'Estadio Heraclio Tapia',               lat: -9.9367, lng: -76.2469 },
+    { nombre: 'Mirador Pillco Mozo',                  lat: -9.9106, lng: -76.2461 },
+  ];
+
+  // Coordenadas iniciales: Plaza de Armas de Huánuco
+  const PLAZA_ARMAS = { lat: -9.9306, lng: -76.2422 };
+
+  let rideSeleccionado = 'basico';
+  let destinoElegido = '';
+  let destinoCoords  = null;
+  let map, userMarker, destinoMarker, rutaLayer;
+  let carMarkers = [];
+  let searchDebounceTimer;
+
+  // Cargar nombre usuario + inicializar mapa
+  window.addEventListener('DOMContentLoaded', () => {
+    const u = JSON.parse(localStorage.getItem('pillco_user') || '{}');
+    if (u.nombre) document.getElementById('sidebar-name').textContent = u.nombre;
+    renderDestinos(destinos);
+
+    // Restaurar método de pago seleccionado
+    const m = localStorage.getItem('pillco_pago');
+    if (m) {
+      const found = METODOS_PAGO.find(p => p.id === m);
+      if (found) {
+        metodoPagoActual = m;
+        document.getElementById('pago-text').textContent = found.nombre;
+        document.getElementById('pago-icon').textContent = found.icon;
+      }
+    }
+
+    initMapa();
+  });
+
+  // ═══════════════ MAPA LEAFLET ═══════════════
+  function initMapa() {
+    map = L.map('leaflet-map', {
+      zoomControl: false,
+      attributionControl: true,
+    }).setView([PLAZA_ARMAS.lat, PLAZA_ARMAS.lng], 15);
+
+    // Tiles de OpenStreetMap (gratis, sin API key)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap',
+    }).addTo(map);
+
+    // Marcador del usuario (Plaza de Armas)
+    userMarker = L.marker([PLAZA_ARMAS.lat, PLAZA_ARMAS.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div class="user-marker"></div>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      })
+    }).addTo(map);
+    userMarker.bindPopup('<strong>Tu ubicación</strong><br>Plaza de Armas de Huánuco');
+
+    // Conductores cercanos simulados (puntos cerca de Plaza de Armas)
+    const conductores = [
+      { lat: -9.9286, lng: -76.2452, tipo: 'primary'  },
+      { lat: -9.9342, lng: -76.2398, tipo: 'tertiary' },
+      { lat: -9.9275, lng: -76.2395, tipo: 'primary'  },
+      { lat: -9.9320, lng: -76.2470, tipo: 'tertiary' },
+    ];
+    conductores.forEach(c => {
+      const marker = L.marker([c.lat, c.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div class="car-marker ${c.tipo === 'tertiary' ? 'tertiary' : ''}">directions_car</div>`,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+        })
+      }).addTo(map);
+      marker.bindPopup('🚗 Conductor disponible');
+      carMarkers.push(marker);
+    });
+
+    // Mover los conductores cada 3s para simular movimiento
+    setInterval(() => {
+      carMarkers.forEach(m => {
+        const pos = m.getLatLng();
+        m.setLatLng([
+          pos.lat + (Math.random() - 0.5) * 0.0008,
+          pos.lng + (Math.random() - 0.5) * 0.0008,
+        ]);
+      });
+    }, 3000);
+  }
+
+  function centrarEnMiUbicacion() {
+    if (navigator.geolocation) {
+      showToast('Obteniendo tu ubicación...', '#006399');
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          map.flyTo([lat, lng], 16);
+          userMarker.setLatLng([lat, lng]);
+          document.getElementById('pickup-label').textContent = `Mi ubicación (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+          showToast('✓ Ubicación actualizada');
+        },
+        () => {
+          map.flyTo([PLAZA_ARMAS.lat, PLAZA_ARMAS.lng], 15);
+          showToast('No se pudo obtener tu ubicación', '#ba1a1a');
+        }
+      );
+    } else {
+      map.flyTo([PLAZA_ARMAS.lat, PLAZA_ARMAS.lng], 15);
+    }
+  }
+
+  // ═══════════════ BÚSQUEDA NOMINATIM ═══════════════
+  function onDestinoInput(q) {
+    clearTimeout(searchDebounceTimer);
+    if (q.trim().length < 3) {
+      document.getElementById('destinos-header').textContent = 'Destinos populares en Huánuco';
+      renderDestinos(destinos);
+      return;
+    }
+    searchDebounceTimer = setTimeout(() => buscarNominatim(q.trim()), 400);
+  }
+
+  async function buscarNominatim(q) {
+    document.getElementById('search-spinner').classList.remove('hidden');
+    document.getElementById('destinos-header').textContent = 'Buscando...';
+    try {
+      // Bounding box de Huánuco para acotar la búsqueda
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Huánuco, Perú')}&limit=8&countrycodes=pe&addressdetails=1`;
+      const r = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+      const data = await r.json();
+
+      if (data.length === 0) {
+        document.getElementById('destinos-header').textContent = 'Sin resultados';
+        document.getElementById('destinos-list').innerHTML = `
+          <li class="text-center py-6 text-on-surface-variant text-body-sm">
+            No encontramos "${q}". Intenta con otra dirección.
+          </li>`;
+        return;
+      }
+
+      document.getElementById('destinos-header').textContent = `${data.length} resultado${data.length > 1 ? 's' : ''}`;
+      const resultados = data.map(d => ({
+        nombre: d.display_name.split(',').slice(0, 2).join(', '),
+        full:   d.display_name,
+        lat:    parseFloat(d.lat),
+        lng:    parseFloat(d.lon),
+      }));
+      renderDestinos(resultados, true);
+    } catch (e) {
+      document.getElementById('destinos-header').textContent = 'Error de conexión';
+      showToast('Error al buscar dirección', '#ba1a1a');
+    } finally {
+      document.getElementById('search-spinner').classList.add('hidden');
+    }
+  }
+
+  // ═══════════════ SCREENS ═══════════════
+  function openScreen(name) {
+    const el = document.getElementById('screen-' + name);
+    if (!el) return;
+    el.classList.add('open');
+    if (name === 'viajes')   renderViajes();
+    if (name === 'pagos')    renderPagos();
+    if (name === 'promos')   renderPromos();
+    if (name === 'ayuda')    renderFAQ();
+    if (name === 'perfil')   renderPerfil();
+    if (name === 'mensajes') renderMensajes();
+  }
+  function closeScreen(name) {
+    document.getElementById('screen-' + name).classList.remove('open');
+  }
+
+  // ── Mis Viajes ────────────────────────────────────────────────
+  function renderViajes() {
+    const historial = JSON.parse(localStorage.getItem('pillco_historial') || '[]');
+    const ul = document.getElementById('viajes-list');
+
+    if (historial.length === 0) {
+      ul.innerHTML = `
+        <div class="flex flex-col items-center gap-3 py-16">
+          <div class="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+            <span class="material-symbols-outlined text-primary text-4xl">history</span>
+          </div>
+          <p class="font-headline-sm text-on-surface">Aún no tienes viajes</p>
+          <p class="text-body-sm text-on-surface-variant text-center max-w-[260px]">
+            Cuando completes tu primer viaje aparecerá aquí tu historial.
+          </p>
+          <button onclick="closeScreen('viajes')" class="mt-4 bg-primary text-on-primary px-6 py-3 rounded-xl font-label-lg active:scale-95">
+            Solicitar viaje
+          </button>
+        </div>`;
+      return;
+    }
+
+    ul.innerHTML = historial.slice().reverse().map(v => `
+      <div class="bg-white rounded-xl p-4 mb-3 shadow-sm flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <span class="material-symbols-outlined text-primary">${v.tipo === 'premium' ? 'airport_shuttle' : 'directions_car'}</span>
+        </div>
+        <div class="flex-grow min-w-0">
+          <p class="font-label-lg text-on-surface truncate">${v.destino}</p>
+          <p class="text-label-md text-outline">${v.fecha} · ${v.tipo === 'premium' ? 'Premium' : 'Básico'}</p>
+          ${v.rating ? `<div class="flex items-center gap-0.5 mt-1">${'★'.repeat(v.rating)}<span class="text-outline-variant">${'★'.repeat(5 - v.rating)}</span></div>` : ''}
+        </div>
+        <div class="text-right">
+          <p class="font-label-lg text-primary">S/ ${v.precio}</p>
+          <p class="text-label-md text-outline">${v.pago || 'Efectivo'}</p>
+        </div>
+      </div>`).join('');
+  }
+
+  // ── Pagos ────────────────────────────────────────────────────
+  function renderPagos() {
+    document.getElementById('pagos-list').innerHTML = METODOS_PAGO.map(m => `
+      <button onclick="seleccionarPago('${m.id}')"
+        class="bg-white p-4 rounded-xl flex items-center gap-4 active:scale-[0.98] transition-transform border-2 ${metodoPagoActual === m.id ? 'border-primary' : 'border-transparent'} shadow-sm text-left">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white" style="background:${m.color}">
+          <span class="material-symbols-outlined">${m.icon}</span>
+        </div>
+        <div class="flex-grow">
+          <p class="font-label-lg text-on-surface">${m.nombre}</p>
+          <p class="text-label-md text-outline">${m.detalle}</p>
+        </div>
+        ${metodoPagoActual === m.id
+          ? `<span class="material-symbols-outlined text-primary" style="font-variation-settings:'FILL' 1">check_circle</span>`
+          : `<span class="material-symbols-outlined text-outline-variant">radio_button_unchecked</span>`}
+      </button>`).join('');
+  }
+  function seleccionarPago(id) {
+    metodoPagoActual = id;
+    localStorage.setItem('pillco_pago', id);
+    const m = METODOS_PAGO.find(p => p.id === id);
+    document.getElementById('pago-text').textContent = m.nombre;
+    document.getElementById('pago-icon').textContent = m.icon;
+    renderPagos();
+    showToast('Pago actualizado: ' + m.nombre);
+  }
+  function addPaymentMethod() {
+    showToast('Función disponible próximamente', '#006399');
+  }
+
+  // ── Promos ───────────────────────────────────────────────────
+  function renderPromos() {
+    document.getElementById('promos-list').innerHTML = PROMOS.map(p => `
+      <div class="bg-white rounded-xl p-4 shadow-sm flex items-start gap-3">
+        <div class="w-12 h-12 rounded-xl bg-tertiary-container/30 flex items-center justify-center flex-shrink-0">
+          <span class="material-symbols-outlined text-tertiary">local_offer</span>
+        </div>
+        <div class="flex-grow">
+          <div class="flex items-center gap-2 mb-1">
+            <p class="font-label-lg text-on-surface">${p.titulo}</p>
+            ${p.tag ? `<span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-white" style="background:${p.tagColor}">${p.tag}</span>` : ''}
+          </div>
+          <p class="text-label-md text-outline mb-2">${p.detalle}</p>
+          <button onclick="aplicarCodigo('${p.codigo}')" class="bg-primary/10 text-primary px-3 py-1 rounded-lg text-label-md font-label-md tracking-wider hover:bg-primary/20 active:scale-95 transition-all">
+            ${p.codigo} <span class="material-symbols-outlined text-[12px] align-middle">content_copy</span>
+          </button>
+        </div>
+      </div>`).join('');
+  }
+  function aplicarCodigo(codigo) {
+    document.getElementById('promo-input').value = codigo;
+    aplicarPromo();
+  }
+  function aplicarPromo() {
+    const codigo = document.getElementById('promo-input').value.trim().toUpperCase();
+    if (!codigo) return showToast('Ingresa un código', '#ba1a1a');
+    const found = PROMOS.find(p => p.codigo === codigo);
+    if (found) {
+      localStorage.setItem('pillco_promo', codigo);
+      showToast('✓ ' + found.titulo + ' aplicado');
+    } else {
+      showToast('Código no válido', '#ba1a1a');
+    }
+  }
+
+  // ── FAQ ──────────────────────────────────────────────────────
+  function renderFAQ() {
+    document.getElementById('faq-list').innerHTML = FAQS.map((f, i) => `
+      <details class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <summary class="p-4 flex items-center gap-3 cursor-pointer font-label-lg text-on-surface list-none">
+          <span class="flex-grow">${f.q}</span>
+          <span class="material-symbols-outlined text-outline">expand_more</span>
+        </summary>
+        <p class="px-4 pb-4 text-body-sm text-on-surface-variant border-t border-outline-variant/30 pt-3">${f.a}</p>
+      </details>`).join('');
+  }
+
+  // ── Perfil ───────────────────────────────────────────────────
+  function renderPerfil() {
+    const u = JSON.parse(localStorage.getItem('pillco_user') || '{}');
+    const h = JSON.parse(localStorage.getItem('pillco_historial') || '[]');
+    document.getElementById('perfil-name').textContent = u.nombre || 'Viajero';
+    document.getElementById('perfil-tel').textContent  = u.tel ? '+51 ' + u.tel : '+51 ---';
+    document.getElementById('stat-viajes').textContent = h.length;
+    const total = h.reduce((acc, v) => acc + parseFloat(v.precio || 0), 0);
+    document.getElementById('stat-gasto').textContent = 'S/' + total.toFixed(2);
+  }
+  function editProfile() {
+    const u = JSON.parse(localStorage.getItem('pillco_user') || '{}');
+    const nuevoNombre = prompt('Editar nombre:', u.nombre || '');
+    if (nuevoNombre && nuevoNombre.trim()) {
+      u.nombre = nuevoNombre.trim();
+      localStorage.setItem('pillco_user', JSON.stringify(u));
+      document.getElementById('sidebar-name').textContent = u.nombre;
+      renderPerfil();
+      showToast('Perfil actualizado');
+    }
+  }
+
+  // ── Mensajes ─────────────────────────────────────────────────
+  function renderMensajes() {
+    const h = JSON.parse(localStorage.getItem('pillco_historial') || '[]');
+    const ul = document.getElementById('mensajes-list');
+    if (h.length === 0) {
+      ul.innerHTML = `
+        <div class="flex flex-col items-center gap-3 py-12">
+          <div class="w-20 h-20 rounded-full bg-secondary/10 flex items-center justify-center">
+            <span class="material-symbols-outlined text-secondary text-4xl">chat_bubble</span>
+          </div>
+          <p class="font-headline-sm text-on-surface">Sin mensajes</p>
+          <p class="text-body-sm text-on-surface-variant text-center max-w-[260px]">Cuando solicites un viaje podrás chatear con tu conductor desde aquí.</p>
+        </div>`;
+      return;
+    }
+    ul.innerHTML = h.slice().reverse().slice(0, 5).map(v => `
+      <div class="flex items-center gap-3 p-3 border-b border-outline-variant/30 last:border-0">
+        <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+          <span class="material-symbols-outlined text-primary">person</span>
+        </div>
+        <div class="flex-grow min-w-0">
+          <p class="font-label-lg text-on-surface">${v.conductor || 'Javier L.'}</p>
+          <p class="text-label-md text-outline truncate">Viaje a ${v.destino}</p>
+        </div>
+        <p class="text-label-md text-outline">${v.fecha}</p>
+      </div>`).join('');
+  }
+
+  function selectRide(tipo) {
+    rideSeleccionado = tipo;
+    document.getElementById('opt-basico').classList.toggle('selected', tipo === 'basico');
+    document.getElementById('opt-premium').classList.toggle('selected', tipo === 'premium');
+    document.getElementById('btn-text').textContent =
+      tipo === 'basico' ? 'Solicitar Pillco Básico' : 'Solicitar Pillco Premium';
+  }
+
+  async function solicitarViaje() {
+    if (!destinoElegido) {
+      openDestinoModal();
+      showToast('Primero selecciona tu destino','#006399');
+      return;
+    }
+    const btn  = document.getElementById('btn-solicitar');
+    const text = document.getElementById('btn-text');
+    btn.disabled = true;
+    text.innerHTML = '<span class="spinner"></span>';
+
+    const precio = rideSeleccionado === 'basico'
+      ? (window._precioBase    || '6.50')
+      : (window._precioPremium || '9.50');
+    const minutos = window._minutos || (rideSeleccionado === 'basico' ? 8 : 5);
+    const pagoLabel = (METODOS_PAGO.find(p => p.id === metodoPagoActual) || {}).nombre || 'Efectivo';
+    const origen = { lat: PLAZA_ARMAS.lat, lng: PLAZA_ARMAS.lng };
+
+    const viaje = {
+      tipo: rideSeleccionado, destino: destinoElegido, precio, minutos,
+      origen, destinoCoords,
+    };
+
+    // Backend real: dispara matching → la app Conductor recibe el viaje en vivo
+    try {
+      const r = await window.PillcoAPI.requestTrip({
+        origen,
+        destino: destinoCoords,
+        tipo: rideSeleccionado,
+        destinoNombre: destinoElegido,
+        pago: pagoLabel,
+      });
+      viaje.tripId = r.trip.id;
+      viaje.backend = true;
+      showToast(r.conductoresEncontrados
+        ? `Buscando… ${r.conductoresEncontrados} conductor(es) cerca`
+        : 'Sin conductores online — modo demo');
+    } catch (err) {
+      await delay(1400); // modo offline/demo
+    }
+
+    localStorage.setItem('pillco_viaje', JSON.stringify(viaje));
+    localStorage.setItem('pillco_pago_label', JSON.stringify(pagoLabel));
+    window.location.href = DESTINOS;
+  }
+
+  // ── Destino modal ──────────────────────────────────────────────
+  function openDestinoModal() {
+    document.getElementById('destino-modal').classList.add('open');
+    setTimeout(() => document.getElementById('destino-input').focus(), 200);
+  }
+  function closeDestinoModal() {
+    document.getElementById('destino-modal').classList.remove('open');
+  }
+  function renderDestinos(lista, esBusqueda = false) {
+    const ul = document.getElementById('destinos-list');
+    ul.innerHTML = lista.map((d, i) => `
+      <li>
+        <button data-idx="${i}" data-source="${esBusqueda ? 'search' : 'popular'}"
+          class="destino-item w-full flex items-start gap-3 px-3 py-3 rounded-xl hover:bg-surface-container active:bg-surface-container-low transition-colors text-left">
+          <span class="material-symbols-outlined text-outline text-[20px] mt-0.5">${esBusqueda ? 'location_on' : 'star'}</span>
+          <span class="flex-grow min-w-0">
+            <span class="font-body-md text-body-md text-on-surface block truncate">${d.nombre}</span>
+            ${d.full ? `<span class="text-label-md text-outline block truncate">${d.full}</span>` : ''}
+          </span>
+        </button>
+      </li>`).join('');
+
+    // Wire up clicks (con cierre sobre la lista actual)
+    ul.querySelectorAll('.destino-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        elegirDestino(lista[idx]);
+      });
+    });
+  }
+
+  function elegirDestino(d) {
+    destinoElegido = d.nombre;
+    destinoCoords  = { lat: d.lat, lng: d.lng };
+
+    document.getElementById('destino-label').textContent = d.nombre;
+    document.getElementById('destino-label').classList.remove('text-outline');
+    document.getElementById('destino-label').classList.add('text-on-surface','font-body-md');
+    closeDestinoModal();
+    showToast('Destino: ' + d.nombre);
+
+    // Mostrar destino en el mapa + dibujar ruta
+    if (destinoMarker) map.removeLayer(destinoMarker);
+    if (rutaLayer)     map.removeLayer(rutaLayer);
+
+    destinoMarker = L.marker([d.lat, d.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div class="destino-marker"><span class="material-symbols-outlined">place</span></div>',
+        iconSize: [36, 36],
+        iconAnchor: [18, 36],
+      })
+    }).addTo(map);
+    destinoMarker.bindPopup(`<strong>Destino</strong><br>${d.nombre}`);
+
+    // Línea recta como "ruta" (para una ruta real se usaría OSRM/GraphHopper)
+    rutaLayer = L.polyline(
+      [[PLAZA_ARMAS.lat, PLAZA_ARMAS.lng], [d.lat, d.lng]],
+      { color: '#003820', weight: 4, opacity: 0.8, dashArray: '8, 8' }
+    ).addTo(map);
+
+    // Encuadrar mapa para mostrar recojo + destino
+    map.fitBounds([
+      [PLAZA_ARMAS.lat, PLAZA_ARMAS.lng],
+      [d.lat, d.lng]
+    ], { padding: [80, 80], maxZoom: 16 });
+
+    // Calcular distancia y tiempo estimado
+    const distKm = distanciaKm(PLAZA_ARMAS.lat, PLAZA_ARMAS.lng, d.lat, d.lng);
+    const minutos = Math.max(3, Math.round(distKm * 4)); // ~15 km/h promedio ciudad
+    const precioBase = (3.5 + distKm * 2.2).toFixed(2);
+    const precioPremium = (5 + distKm * 3.0).toFixed(2);
+
+    // Actualizar precios en las tarjetas
+    document.querySelector('#opt-basico  span.text-label-lg').textContent  = 'S/ ' + precioBase;
+    document.querySelector('#opt-premium span.text-label-lg').textContent  = 'S/ ' + precioPremium;
+    document.querySelector('#opt-basico  .text-label-md').textContent = minutos + ' min · ' + distKm.toFixed(1) + ' km';
+    document.querySelector('#opt-premium .text-label-md').textContent = Math.max(3, minutos - 2) + ' min · Aire acond.';
+
+    // Guardar para detalles
+    window._precioBase = precioBase;
+    window._precioPremium = precioPremium;
+    window._minutos = minutos;
+  }
+
+  // Haversine
+  function distanciaKm(lat1, lng1, lat2, lng2) {
+    const R = 6371;
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  // ── Sidebar ────────────────────────────────────────────────────
+  function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebar-overlay').classList.add('open');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('open');
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────
+  function showToast(msg, color = '#003820') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = color;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Pillco Móvil — Tu ciudad, tu movilidad</title>
+<meta name="description" content="App de movilidad para Huánuco. Viajes seguros, conductores verificados, pagos con Yape, Plin o efectivo."/>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.webmanifest"/>
+<meta name="theme-color" content="#003820"/>
+<meta name="background-color" content="#003820"/>
+
+<!-- iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Pillco"/>
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png"/>
+<link rel="apple-touch-icon" sizes="167x167" href="/icons/apple-touch-icon-167.png"/>
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png"/>
+
+<!-- Splash screens iOS -->
+<link rel="apple-touch-startup-image" href="/splash/splash-iphone-6.7.png" media="(device-width: 430px) and (device-height: 932px)"/>
+<link rel="apple-touch-startup-image" href="/splash/splash-iphone-6.5.png" media="(device-width: 414px) and (device-height: 896px)"/>
+<link rel="apple-touch-startup-image" href="/splash/splash-iphone-5.8.png" media="(device-width: 375px) and (device-height: 812px)"/>
+<link rel="apple-touch-startup-image" href="/splash/splash-iphone-5.5.png" media="(device-width: 414px) and (device-height: 736px)"/>
+
+<!-- Favicons -->
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"/>
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png"/>
+
+<!-- Open Graph -->
+<meta property="og:title" content="Pillco Móvil"/>
+<meta property="og:description" content="Tu app de movilidad en Huánuco"/>
+<meta property="og:image" content="/icons/icon-512.png"/>
+<meta property="og:type" content="website"/>
+
+<meta http-equiv="refresh" content="0; url=bienvenida_pillco_m_vil/code.html"/>
+<script>
+  // Registrar Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+  }
+  window.location.replace('bienvenida_pillco_m_vil/code.html');
+</script>
+<style>
+  body { font-family: system-ui, sans-serif; background: #003820; color: #fff;
+         display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+  img { width: 120px; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+</style>
+</head>
+<body>
+  <div style="text-align:center">
+    <img src="/icons/icon-192.png" alt="Pillco Móvil"/>
+    <p>Cargando Pillco Móvil…</p>
+    <p style="font-size:12px;opacity:0.7"><a href="bienvenida_pillco_m_vil/code.html" style="color:#95d4ac">Continuar manualmente</a></p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html class="light" lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Detalles del Viaje - Pillco Móvil</title>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<meta name="theme-color" content="#003820"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Pillco"/>
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png"/>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"/>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}</script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="/shared/api.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "surface-container-high": "#e5e8ec", "primary": "#003820", "secondary": "#006399",
+          "on-primary-fixed-variant": "#0f5132", "surface-variant": "#e0e3e6",
+          "on-error-container": "#93000a", "tertiary": "#482904",
+          "on-secondary": "#ffffff", "surface-container-low": "#f1f4f7",
+          "inverse-surface": "#2d3134", "on-surface": "#181c1f",
+          "primary-container": "#0f5132", "tertiary-container": "#623f18",
+          "inverse-on-surface": "#eef1f4", "inverse-primary": "#95d4ac",
+          "background": "#f7fafd", "on-surface-variant": "#404942", "on-primary": "#ffffff",
+          "surface-container-highest": "#e0e3e6", "on-error": "#ffffff",
+          "surface": "#f7fafd", "on-tertiary": "#ffffff", "error": "#ba1a1a",
+          "secondary-container": "#67bafd", "secondary-fixed": "#cde5ff",
+          "on-secondary-fixed": "#001d32", "outline": "#707971",
+          "primary-fixed-dim": "#95d4ac", "primary-fixed": "#b0f1c7",
+          "outline-variant": "#c0c9c0", "on-primary-container": "#84c39b",
+          "surface-bright": "#f7fafd", "error-container": "#ffdad6",
+          "surface-container": "#ebeef2", "surface-container-lowest": "#ffffff",
+        },
+        borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px" },
+        spacing: { "stack-sm": "8px", "base": "8px", "gutter": "16px", "container-margin": "20px", "stack-md": "16px", "stack-lg": "24px" },
+        fontFamily: { "label-lg": ["Inter"], "body-md": ["Inter"], "body-sm": ["Inter"], "label-md": ["Inter"], "body-lg": ["Inter"], "headline-sm": ["Montserrat"], "headline-lg": ["Montserrat"], "headline-lg-mobile": ["Montserrat"], "headline-md": ["Montserrat"] },
+        fontSize: {
+          "label-lg": ["14px", { lineHeight: "16px", fontWeight: "600" }],
+          "body-md":  ["16px", { lineHeight: "24px", fontWeight: "400" }],
+          "body-sm":  ["14px", { lineHeight: "20px", fontWeight: "400" }],
+          "label-md": ["12px", { lineHeight: "16px", fontWeight: "500" }],
+          "body-lg":  ["18px", { lineHeight: "28px", fontWeight: "400" }],
+          "headline-sm": ["20px", { lineHeight: "28px", fontWeight: "600" }],
+          "headline-lg": ["32px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700" }],
+          "headline-lg-mobile": ["28px", { lineHeight: "36px", fontWeight: "700" }],
+          "headline-md": ["24px", { lineHeight: "32px", fontWeight: "600" }]
+        }
+      },
+    },
+  }
+</script>
+<style>
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .custom-shadow-primary { box-shadow: 0 10px 25px -5px rgba(0,56,32,0.15); }
+  body { min-height: max(884px, 100dvh); }
+
+  /* Toast */
+  #toast {
+    position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-80px);
+    transition: transform 0.3s; z-index: 999;
+    background: #003820; color: #fff; padding: 10px 20px;
+    border-radius: 10px; font-size: 13px; white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Timer */
+  #arrival-ring {
+    stroke-dasharray: 226;
+    stroke-dashoffset: 226;
+    transition: stroke-dashoffset 1s linear;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+  }
+
+  /* Chat modal */
+  #chat-modal {
+    transition: opacity 0.25s, transform 0.25s;
+    opacity: 0; transform: translateY(30px); pointer-events: none;
+  }
+  #chat-modal.open { opacity: 1; transform: translateY(0); pointer-events: all; }
+
+  /* Rating modal */
+  #rating-modal {
+    transition: opacity 0.3s;
+    opacity: 0; pointer-events: none;
+  }
+  #rating-modal.open { opacity: 1; pointer-events: all; }
+
+  .star-btn { transition: transform 0.15s; }
+  .star-btn:hover, .star-btn.active { transform: scale(1.2); }
+
+  /* Cancelar modal */
+  #cancel-modal {
+    transition: opacity 0.25s;
+    opacity: 0; pointer-events: none;
+  }
+  #cancel-modal.open { opacity: 1; pointer-events: all; }
+
+  @keyframes pulse-dot {
+    0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+  .live-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+</style>
+</head>
+<body class="bg-background text-on-surface flex flex-col min-h-screen font-body-md text-body-md overflow-x-hidden">
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- TopAppBar -->
+<header class="bg-surface/90 backdrop-blur-md text-primary font-headline-sm flex items-center justify-between px-container-margin py-4 w-full sticky top-0 z-40 shadow-sm">
+  <div class="flex items-center gap-4">
+    <a href="../mapa_pillco_m_vil/code.html"
+       class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface-container-low transition-all active:scale-90">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </a>
+    <h1 class="font-headline-md text-headline-md text-primary tracking-tight">Detalles del Viaje</h1>
+  </div>
+  <div class="flex items-center gap-2">
+    <!-- Live indicator -->
+    <div class="flex items-center gap-1.5 px-3 py-1 bg-error/10 rounded-full">
+      <span class="w-2 h-2 rounded-full bg-error live-dot"></span>
+      <span class="text-label-md font-label-md text-error">En vivo</span>
+    </div>
+    <button onclick="showToast('Centro de Seguridad Pillco 24/7 activado','#482904')"
+      class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface-container-low transition-all active:scale-90">
+      <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">shield</span>
+    </button>
+  </div>
+</header>
+
+<!-- Main Content -->
+<main class="flex-grow relative flex flex-col">
+
+  <!-- Map Layer (Leaflet real) -->
+  <section class="h-64 w-full bg-surface-container overflow-hidden relative">
+    <div id="detalle-map" style="width:100%; height:100%; z-index:1;"></div>
+    <!-- Countdown ring overlay -->
+    <div class="absolute top-3 right-3 w-16 h-16 flex items-center justify-center">
+      <svg class="absolute" width="64" height="64" viewBox="0 0 72 72">
+        <circle cx="36" cy="36" r="32" fill="rgba(255,255,255,0.85)" stroke="#e0e3e6" stroke-width="4"/>
+        <circle id="arrival-ring" cx="36" cy="36" r="32" fill="none" stroke="#003820" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="text-center z-10">
+        <p id="timer-num" class="font-headline-sm text-headline-sm text-primary leading-none">8</p>
+        <p id="timer-unit" class="text-[9px] text-outline font-label-md leading-none mt-0.5">min</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Ride Info Sheet -->
+  <section class="flex flex-col -mt-6 bg-surface-container-lowest rounded-t-[32px] p-container-margin shadow-xl relative z-10">
+    <div class="w-12 h-1.5 bg-outline-variant/30 rounded-full self-center mb-6"></div>
+
+    <!-- Driver Card -->
+    <div class="flex items-start gap-stack-lg mb-stack-lg border-b border-outline-variant/30 pb-stack-lg">
+      <div class="relative">
+        <img class="w-20 h-20 rounded-2xl object-cover border-2 border-primary-fixed-dim"
+          src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJ2GMIUAkd9P0_fPwrLJJRYeuln9xJaAS-5g1isi6pPIbmmWWehenGPQ4uhbf3p0gtlq_A-Oua8AZmh2PPtM9vyhIwvratRQCei65MxEfmXWndkxeXcRKRSj-rw_iyyb7nK9zo-3nmo6-oS5LgInSOsyyxKw1h_xyv5qCf0DOD62m17rkBSN460VDcDHwfWXFiETBvDr2wQ127UYq9P67GEVPc9b1Dtj1sXTIqB16saoGtLAeXeXcGO6eOwpSjA9SpoZpAypseiQA"
+          alt="Javier L."/>
+        <div class="absolute -bottom-2 -right-2 bg-primary text-on-primary rounded-full px-2 py-1 flex items-center gap-1 shadow-md">
+          <span class="text-[10px] font-bold">4.9</span>
+          <span class="material-symbols-outlined text-[12px]" style="font-variation-settings:'FILL' 1">star</span>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1 flex-grow">
+        <div class="flex items-center gap-2">
+          <h2 class="font-headline-sm text-headline-sm text-on-surface">Javier L.</h2>
+          <span class="bg-secondary-fixed text-on-secondary-fixed text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Verificado</span>
+        </div>
+        <p class="text-body-sm text-on-surface-variant flex items-center gap-1">
+          <span class="material-symbols-outlined text-[16px]">verified_user</span>
+          Conductor Huanuqueño Certificado
+        </p>
+        <div class="mt-2 flex items-center gap-4">
+          <div class="flex flex-col">
+            <span class="text-label-md text-outline">Vehículo</span>
+            <span id="vehicle-label" class="font-label-lg text-primary">Kia Soluto Verde</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-label-md text-outline">Placa</span>
+            <span class="font-label-lg text-primary">W1A-452</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bento stats -->
+    <div class="grid grid-cols-2 gap-4 mb-stack-lg">
+      <div class="bg-surface-container-low p-4 rounded-xl flex flex-col gap-2">
+        <span class="material-symbols-outlined text-secondary">payments</span>
+        <div>
+          <p class="text-label-md text-outline">Precio Est.</p>
+          <p id="precio-label" class="font-headline-sm text-on-surface">S/ 6.50</p>
+        </div>
+      </div>
+      <div class="bg-surface-container-low p-4 rounded-xl flex flex-col gap-2">
+        <span class="material-symbols-outlined text-primary">schedule</span>
+        <div>
+          <p class="text-label-md text-outline">Llegada</p>
+          <p id="llegada-label" class="font-headline-sm text-on-surface">8 min</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="flex gap-4 mb-stack-lg">
+      <button onclick="llamarConductor()"
+        class="flex-1 bg-secondary text-on-secondary py-4 rounded-xl font-label-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-md">
+        <span class="material-symbols-outlined">call</span> Llamar
+      </button>
+      <button onclick="openChat()"
+        class="flex-1 bg-surface-container-high text-secondary border-2 border-secondary/20 py-4 rounded-xl font-label-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+        <span class="material-symbols-outlined">chat_bubble</span> Chat
+      </button>
+    </div>
+
+    <!-- Trip route -->
+    <div class="bg-surface p-stack-md rounded-2xl border border-outline-variant/30 flex flex-col gap-stack-md mb-stack-lg">
+      <div class="flex gap-stack-md relative">
+        <div class="absolute left-3 top-6 bottom-6 w-0.5 border-l-2 border-dashed border-outline-variant"></div>
+        <div class="relative z-10">
+          <span class="material-symbols-outlined text-secondary bg-surface rounded-full" style="font-variation-settings:'FILL' 1">my_location</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-label-md text-outline">Recojo en</span>
+          <span class="font-body-md text-on-surface">Plaza de Armas de Huánuco</span>
+        </div>
+      </div>
+      <div class="flex gap-stack-md">
+        <div class="relative z-10">
+          <span class="material-symbols-outlined text-primary bg-surface rounded-full" style="font-variation-settings:'FILL' 1">location_on</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-label-md text-outline">Destino</span>
+          <span id="destino-display" class="font-body-md text-on-surface">Laguna Viña del Río</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cancelar viaje -->
+    <button onclick="openCancelModal()"
+      class="w-full border border-error/30 text-error py-3 rounded-xl font-label-lg text-label-lg flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-error/5 mb-2">
+      <span class="material-symbols-outlined text-[18px]">cancel</span> Cancelar viaje
+    </button>
+  </section>
+
+  <!-- Support -->
+  <section class="p-container-margin">
+    <button onclick="showToast('Conectando con soporte Pillco 24/7...','#482904')"
+      class="w-full bg-error-container/10 border border-error/20 p-4 rounded-xl flex items-center gap-4 active:scale-[0.98] transition-transform text-left">
+      <div class="bg-error-container p-2 rounded-full">
+        <span class="material-symbols-outlined text-on-error-container">support_agent</span>
+      </div>
+      <div class="flex-grow">
+        <h4 class="font-label-lg text-on-surface">¿Necesitas ayuda?</h4>
+        <p class="text-body-sm text-on-surface-variant">Centro de seguridad Pillco 24/7</p>
+      </div>
+      <span class="material-symbols-outlined text-outline">chevron_right</span>
+    </button>
+  </section>
+
+  <div class="h-28"></div>
+</main>
+
+<!-- Safety FAB -->
+<button onclick="showToast('SOS enviado — equipo de seguridad notificado','#482904')"
+  class="fixed bottom-24 right-container-margin w-14 h-14 bg-tertiary text-on-tertiary rounded-full shadow-2xl flex items-center justify-center z-50 active:scale-90 transition-transform">
+  <span class="material-symbols-outlined text-2xl" style="font-variation-settings:'FILL' 1">shield_with_heart</span>
+</button>
+
+<!-- Bottom Nav -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 py-3 bg-surface-container-lowest text-on-surface-variant font-label-md text-label-md border-t border-outline-variant/30 z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+  <a href="../mapa_pillco_m_vil/code.html"
+    class="flex flex-col items-center gap-1 bg-primary-container/20 text-primary rounded-xl px-3 py-1.5 active:scale-95 transition-transform">
+    <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">directions_car</span>
+    <span>Viajar</span>
+  </a>
+  <button onclick="showToast('Próximamente disponible','#006399')" class="flex flex-col items-center gap-1 hover:text-secondary active:scale-95 transition-all px-3 py-1.5">
+    <span class="material-symbols-outlined">history</span><span>Actividad</span>
+  </button>
+  <button onclick="openChat()" class="flex flex-col items-center gap-1 hover:text-secondary active:scale-95 transition-all px-3 py-1.5">
+    <span class="material-symbols-outlined">chat_bubble</span><span>Mensajes</span>
+  </button>
+  <button onclick="showToast('Próximamente disponible','#006399')" class="flex flex-col items-center gap-1 hover:text-secondary active:scale-95 transition-all px-3 py-1.5">
+    <span class="material-symbols-outlined">person</span><span>Perfil</span>
+  </button>
+</nav>
+
+<!-- ── Chat Modal ───────────────────────────────────────────── -->
+<div id="chat-modal" class="fixed inset-0 z-50 flex flex-col justify-end">
+  <div class="absolute inset-0 bg-black/40" onclick="closeChat()"></div>
+  <div class="relative bg-surface-container-lowest rounded-t-3xl flex flex-col shadow-2xl" style="height:70vh">
+    <div class="flex items-center justify-between p-4 border-b border-outline-variant/30">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center">
+          <span class="material-symbols-outlined text-primary">person</span>
+        </div>
+        <div>
+          <p class="font-label-lg text-on-surface">Javier L.</p>
+          <p class="text-label-md text-secondary flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-secondary inline-block live-dot"></span> En camino
+          </p>
+        </div>
+      </div>
+      <button onclick="closeChat()" class="w-9 h-9 rounded-full hover:bg-surface-container flex items-center justify-center">
+        <span class="material-symbols-outlined text-outline">close</span>
+      </button>
+    </div>
+
+    <!-- Messages -->
+    <div id="chat-messages" class="flex-grow overflow-y-auto p-4 flex flex-col gap-3">
+      <div class="flex justify-start">
+        <div class="bg-surface-container px-4 py-2 rounded-2xl rounded-tl-sm max-w-[75%]">
+          <p class="text-body-sm text-on-surface">¡Hola! Ya estoy en camino. Llegaré en unos minutos 🚗</p>
+          <p class="text-[10px] text-outline mt-1">Javier · hace 2 min</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="p-3 border-t border-outline-variant/30 flex gap-2">
+      <input id="chat-input" type="text" placeholder="Escribe un mensaje..."
+        class="flex-grow bg-surface-container-low border border-outline-variant focus:border-primary focus:ring-0 px-4 py-2.5 rounded-full font-body-sm text-body-sm"
+        onkeydown="if(event.key==='Enter') sendMsg()"/>
+      <button onclick="sendMsg()"
+        class="w-11 h-11 bg-primary text-on-primary rounded-full flex items-center justify-center active:scale-90 transition-transform flex-shrink-0">
+        <span class="material-symbols-outlined text-[20px]">send</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Cancelar Modal ───────────────────────────────────────── -->
+<div id="cancel-modal" class="fixed inset-0 z-50 flex items-center justify-center px-6">
+  <div class="absolute inset-0 bg-black/50" onclick="closeCancelModal()"></div>
+  <div class="relative bg-surface-container-lowest rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-4">
+    <div class="flex flex-col items-center gap-3 text-center">
+      <div class="w-14 h-14 bg-error/10 rounded-full flex items-center justify-center">
+        <span class="material-symbols-outlined text-error text-3xl">cancel</span>
+      </div>
+      <h3 class="font-headline-sm text-headline-sm text-on-surface">¿Cancelar el viaje?</h3>
+      <p class="font-body-sm text-body-sm text-on-surface-variant">El conductor ya está en camino. Cancelar puede generar una penalidad.</p>
+    </div>
+    <div class="flex gap-3 mt-2">
+      <button onclick="closeCancelModal()"
+        class="flex-1 border border-outline-variant py-3 rounded-xl font-label-lg text-on-surface active:scale-95 transition-transform">
+        Mantener
+      </button>
+      <button onclick="confirmarCancelacion()"
+        class="flex-1 bg-error text-on-error py-3 rounded-xl font-label-lg active:scale-95 transition-transform">
+        Cancelar viaje
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Rating Modal ─────────────────────────────────────────── -->
+<div id="rating-modal" class="fixed inset-0 z-50 flex items-center justify-center px-6 bg-black/50">
+  <div class="bg-surface-container-lowest rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-4 text-center">
+    <img class="w-20 h-20 rounded-2xl object-cover border-2 border-primary-fixed-dim mx-auto"
+      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJ2GMIUAkd9P0_fPwrLJJRYeuln9xJaAS-5g1isi6pPIbmmWWehenGPQ4uhbf3p0gtlq_A-Oua8AZmh2PPtM9vyhIwvratRQCei65MxEfmXWndkxeXcRKRSj-rw_iyyb7nK9zo-3nmo6-oS5LgInSOsyyxKw1h_xyv5qCf0DOD62m17rkBSN460VDcDHwfWXFiETBvDr2wQ127UYq9P67GEVPc9b1Dtj1sXTIqB16saoGtLAeXeXcGO6eOwpSjA9SpoZpAypseiQA"
+      alt="Javier L."/>
+    <h3 class="font-headline-sm text-headline-sm text-on-surface">¡Viaje completado!</h3>
+    <p class="font-body-sm text-on-surface-variant">¿Cómo fue tu experiencia con <strong>Javier L.</strong>?</p>
+    <!-- Stars -->
+    <div class="flex justify-center gap-3" id="stars">
+      <button class="star-btn text-4xl text-outline-variant" data-val="1" onclick="rateStar(1)">★</button>
+      <button class="star-btn text-4xl text-outline-variant" data-val="2" onclick="rateStar(2)">★</button>
+      <button class="star-btn text-4xl text-outline-variant" data-val="3" onclick="rateStar(3)">★</button>
+      <button class="star-btn text-4xl text-outline-variant" data-val="4" onclick="rateStar(4)">★</button>
+      <button class="star-btn text-4xl text-outline-variant" data-val="5" onclick="rateStar(5)">★</button>
+    </div>
+    <button id="btn-enviar-rating" onclick="enviarRating()" disabled
+      class="w-full bg-primary text-on-primary py-4 rounded-xl font-label-lg disabled:opacity-40 active:scale-95 transition-all">
+      Enviar calificación
+    </button>
+    <button onclick="skipRating()" class="text-outline font-label-md text-label-md hover:underline">Omitir</button>
+  </div>
+</div>
+
+<script>
+  const MAPA = '../mapa_pillco_m_vil/code.html';
+  let starSeleccionado = 0;
+
+  // ── Cargar datos del viaje ────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    const viaje = JSON.parse(localStorage.getItem('pillco_viaje') || '{}');
+    if (viaje.destino)  document.getElementById('destino-display').textContent = viaje.destino;
+    if (viaje.precio)   document.getElementById('precio-label').textContent = 'S/ ' + viaje.precio;
+    if (viaje.tipo === 'premium') {
+      document.getElementById('vehicle-label').textContent = 'Toyota Yaris Plata';
+    }
+    const min = viaje.minutos || (viaje.tipo === 'premium' ? 5 : 8);
+    startTimer(min);
+
+    initDetalleMap(viaje);
+  });
+
+  // ── Mapa real con ruta ────────────────────────────────────────
+  function initDetalleMap(viaje) {
+    const origen  = viaje.origen        || { lat: -9.9306, lng: -76.2422 };
+    const destino = viaje.destinoCoords || { lat: -9.9519, lng: -76.2461 };
+
+    const m = L.map('detalle-map', { zoomControl: false, attributionControl: false })
+              .setView([origen.lat, origen.lng], 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(m);
+
+    // Marker origen (azul)
+    L.marker([origen.lat, origen.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="width:18px;height:18px;background:#006399;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(0,99,153,0.3)"></div>',
+        iconSize: [18, 18], iconAnchor: [9, 9],
+      })
+    }).addTo(m).bindPopup('Recojo');
+
+    // Marker destino (verde primario)
+    L.marker([destino.lat, destino.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="width:30px;height:30px;background:#003820;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,0.3)"></div>',
+        iconSize: [30, 30], iconAnchor: [15, 30],
+      })
+    }).addTo(m).bindPopup('Destino');
+
+    // Ruta
+    L.polyline(
+      [[origen.lat, origen.lng], [destino.lat, destino.lng]],
+      { color: '#003820', weight: 4, opacity: 0.85 }
+    ).addTo(m);
+
+    // Marker del conductor en movimiento
+    let driverPos = [
+      origen.lat + (destino.lat - origen.lat) * 0.3,
+      origen.lng + (destino.lng - origen.lng) * 0.3,
+    ];
+    const driverMarker = L.marker(driverPos, {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="width:36px;height:36px;background:#482904;color:#fff;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.35);font-family:\'Material Symbols Outlined\';font-size:20px">directions_car</div>',
+        iconSize: [36, 36], iconAnchor: [18, 18],
+      })
+    }).addTo(m).bindPopup('🚗 Conductor en camino');
+    window._driverMarker = driverMarker;
+    window._detalleMap = m;
+
+    m.fitBounds([[origen.lat, origen.lng], [destino.lat, destino.lng]], { padding: [40, 40] });
+
+    // Animación simulada (se desactiva si llega ubicación real por Socket.IO)
+    let progreso = 0.3;
+    window._simInterval = setInterval(() => {
+      if (window._realtimeActive) return;
+      progreso = Math.max(0, progreso - 0.01);
+      driverMarker.setLatLng([
+        origen.lat + (destino.lat - origen.lat) * progreso,
+        origen.lng + (destino.lng - origen.lng) * progreso,
+      ]);
+    }, 2000);
+
+    conectarTiempoReal();
+  }
+
+  // ── Tiempo real vía Socket.IO ─────────────────────────────────
+  function conectarTiempoReal() {
+    const viaje = JSON.parse(localStorage.getItem('pillco_viaje') || '{}');
+    if (!viaje.tripId || !window.io || !window.PillcoAPI) return;
+
+    const socket = io(window.PillcoAPI.base);
+    socket.on('connect', () => socket.emit('join_trip', viaje.tripId));
+
+    socket.on('viaje_aceptado', (trip) => {
+      window._realtimeActive = true;
+      if (trip.conductor) {
+        document.querySelector('h2.font-headline-sm').textContent = trip.conductor.nombre;
+        document.getElementById('vehicle-label').textContent = trip.conductor.vehiculo;
+      }
+      showToast('✓ ' + (trip.conductor?.nombre || 'Conductor') + ' aceptó tu viaje');
+    });
+
+    socket.on('driver_location', ({ lat, lng }) => {
+      window._realtimeActive = true;
+      if (window._driverMarker) window._driverMarker.setLatLng([lat, lng]);
+    });
+
+    socket.on('estado_viaje', (trip) => {
+      const labels = { en_camino: 'Conductor en camino', recogido: 'En viaje hacia el destino', completado: '¡Llegaste a tu destino!' };
+      if (labels[trip.estado]) showToast(labels[trip.estado]);
+      if (trip.estado === 'completado') {
+        setTimeout(() => document.getElementById('rating-modal').classList.add('open'), 1200);
+      }
+    });
+
+    socket.on('viaje_cancelado', () => {
+      showToast('El viaje fue cancelado', '#ba1a1a');
+      setTimeout(() => window.location.href = MAPA, 2000);
+    });
+
+    window._tripSocket = socket;
+  }
+
+  // ── Arrival countdown ─────────────────────────────────────────
+  function startTimer(minutos) {
+    let segs = minutos * 60;
+    const total  = segs;
+    const ring   = document.getElementById('arrival-ring');
+    const num    = document.getElementById('timer-num');
+    const unit   = document.getElementById('timer-unit');
+    const stat   = document.getElementById('llegada-label');
+    const circum = 226;
+
+    const tick = () => {
+      if (segs <= 0) {
+        num.textContent  = '0';
+        unit.textContent = 'min';
+        stat.textContent = '¡Llegó!';
+        ring.style.strokeDashoffset = 0;
+        setTimeout(() => document.getElementById('rating-modal').classList.add('open'), 1500);
+        return;
+      }
+      const pct = segs / total;
+      ring.style.strokeDashoffset = circum * (1 - pct);
+      const m = Math.floor(segs / 60);
+      const s = segs % 60;
+      if (m > 0) {
+        num.textContent  = m;
+        unit.textContent = 'min';
+        stat.textContent = m + ' min';
+      } else {
+        num.textContent  = s;
+        unit.textContent = 'seg';
+        stat.textContent = s + ' seg';
+      }
+      segs--;
+      setTimeout(tick, 1000);
+    };
+    tick();
+  }
+
+  // ── Llamar conductor ─────────────────────────────────────────
+  function llamarConductor() {
+    showToast('Llamando a Javier L. · +51 987 654 321','#006399');
+  }
+
+  // ── Chat ──────────────────────────────────────────────────────
+  function openChat()  { document.getElementById('chat-modal').classList.add('open'); }
+  function closeChat() { document.getElementById('chat-modal').classList.remove('open'); }
+
+  function sendMsg() {
+    const inp = document.getElementById('chat-input');
+    const msg = inp.value.trim();
+    if (!msg) return;
+    appendMsg(msg, 'user');
+    inp.value = '';
+    setTimeout(() => {
+      const respuestas = [
+        '¡Entendido! Ya casi llego 👍',
+        'Ok, perfecto.',
+        'Sí, no hay problema.',
+        'Estoy en el semáforo, en 2 minutos estoy ahí.',
+        '¿Me puede esperar un momento? Gracias.',
+      ];
+      appendMsg(respuestas[Math.floor(Math.random() * respuestas.length)], 'driver');
+    }, 900 + Math.random() * 600);
+  }
+  function appendMsg(text, from) {
+    const div = document.createElement('div');
+    div.className = 'flex ' + (from === 'user' ? 'justify-end' : 'justify-start');
+    const now = new Date();
+    const hora = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
+    div.innerHTML = `
+      <div class="px-4 py-2 rounded-2xl max-w-[75%] ${from === 'user'
+        ? 'bg-primary text-on-primary rounded-tr-sm'
+        : 'bg-surface-container text-on-surface rounded-tl-sm'}">
+        <p class="text-body-sm">${text}</p>
+        <p class="text-[10px] mt-1 ${from === 'user' ? 'text-primary-fixed/70' : 'text-outline'}">${from === 'user' ? 'Tú' : 'Javier'} · ${hora}</p>
+      </div>`;
+    const msgs = document.getElementById('chat-messages');
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  // ── Cancelar ──────────────────────────────────────────────────
+  function openCancelModal()  { document.getElementById('cancel-modal').classList.add('open'); }
+  function closeCancelModal() { document.getElementById('cancel-modal').classList.remove('open'); }
+  async function confirmarCancelacion() {
+    closeCancelModal();
+    showToast('Viaje cancelado');
+    await delay(1200);
+    window.location.href = MAPA;
+  }
+
+  // ── Rating ────────────────────────────────────────────────────
+  function rateStar(n) {
+    starSeleccionado = n;
+    document.querySelectorAll('#stars .star-btn').forEach((btn, i) => {
+      btn.classList.toggle('text-yellow-400', i < n);
+      btn.classList.toggle('active', i < n);
+      btn.classList.toggle('text-outline-variant', i >= n);
+    });
+    document.getElementById('btn-enviar-rating').disabled = false;
+  }
+  function guardarEnHistorial(rating) {
+    const viaje = JSON.parse(localStorage.getItem('pillco_viaje') || '{}');
+    const historial = JSON.parse(localStorage.getItem('pillco_historial') || '[]');
+    const hoy = new Date();
+    const fecha = hoy.getDate() + '/' + (hoy.getMonth() + 1) + '/' + hoy.getFullYear();
+    historial.push({
+      destino:   viaje.destino || 'Laguna Viña del Río',
+      tipo:      viaje.tipo    || 'basico',
+      precio:    viaje.precio  || '6.50',
+      pago:      (JSON.parse(localStorage.getItem('pillco_pago_label') || '"Efectivo"')),
+      conductor: 'Javier L.',
+      fecha:     fecha,
+      rating:    rating || 0,
+    });
+    localStorage.setItem('pillco_historial', JSON.stringify(historial));
+    localStorage.removeItem('pillco_viaje');
+  }
+  async function enviarRating() {
+    document.getElementById('rating-modal').classList.remove('open');
+    guardarEnHistorial(starSeleccionado);
+    showToast('¡Gracias por tu calificación de ' + starSeleccionado + ' ★!');
+    await delay(1400);
+    window.location.href = MAPA;
+  }
+  async function skipRating() {
+    document.getElementById('rating-modal').classList.remove('open');
+    guardarEnHistorial(0);
+    await delay(400);
+    window.location.href = MAPA;
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────
+  function showToast(msg, color = '#003820') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = color;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>
