@@ -959,6 +959,7 @@
     const viaje = {
       tipo: rideSeleccionado, destino: destinoElegido, precio, minutos,
       origen, destinoCoords,
+      ruta: window._rutaCoords || null,
     };
 
     // Backend real: dispara matching → la app Conductor recibe el viaje en vivo
@@ -1015,7 +1016,7 @@
     });
   }
 
-  function elegirDestino(d) {
+  async function elegirDestino(d) {
     destinoElegido = d.nombre;
     destinoCoords  = { lat: d.lat, lng: d.lng };
 
@@ -1025,7 +1026,7 @@
     closeDestinoModal();
     showToast('Destino: ' + d.nombre);
 
-    // Mostrar destino en el mapa + dibujar ruta
+    // Mostrar destino en el mapa
     if (destinoMarker) map.removeLayer(destinoMarker);
     if (rutaLayer)     map.removeLayer(rutaLayer);
 
@@ -1039,34 +1040,69 @@
     }).addTo(map);
     destinoMarker.bindPopup(`<strong>Destino</strong><br>${d.nombre}`);
 
-    // Línea recta como "ruta" (para una ruta real se usaría OSRM/GraphHopper)
-    rutaLayer = L.polyline(
-      [[PLAZA_ARMAS.lat, PLAZA_ARMAS.lng], [d.lat, d.lng]],
-      { color: '#003820', weight: 4, opacity: 0.8, dashArray: '8, 8' }
-    ).addTo(map);
-
-    // Encuadrar mapa para mostrar recojo + destino
+    // Encuadrar mapa de inmediato (mientras se carga la ruta)
     map.fitBounds([
       [PLAZA_ARMAS.lat, PLAZA_ARMAS.lng],
       [d.lat, d.lng]
     ], { padding: [80, 80], maxZoom: 16 });
 
-    // Calcular distancia y tiempo estimado
-    const distKm = distanciaKm(PLAZA_ARMAS.lat, PLAZA_ARMAS.lng, d.lat, d.lng);
-    const minutos = Math.max(3, Math.round(distKm * 4)); // ~15 km/h promedio ciudad
-    const precioBase = (3.5 + distKm * 2.2).toFixed(2);
-    const precioPremium = (5 + distKm * 3.0).toFixed(2);
+    // ─── Calcular ruta real con OSRM ───────────────────────────
+    let distKm, minutos, rutaCoords;
+    try {
+      const ruta = await obtenerRutaOSRM(PLAZA_ARMAS, d);
+      distKm = ruta.distKm;
+      minutos = ruta.minutos;
+      rutaCoords = ruta.coords;
+    } catch (e) {
+      // Fallback: línea recta + Haversine
+      distKm = distanciaKm(PLAZA_ARMAS.lat, PLAZA_ARMAS.lng, d.lat, d.lng);
+      minutos = Math.max(3, Math.round(distKm * 4));
+      rutaCoords = [[PLAZA_ARMAS.lat, PLAZA_ARMAS.lng], [d.lat, d.lng]];
+      console.warn('OSRM falló, usando línea recta:', e.message);
+    }
 
-    // Actualizar precios en las tarjetas
+    // Dibujar ruta (sólida si es OSRM, punteada si es fallback)
+    rutaLayer = L.polyline(rutaCoords, {
+      color: '#003820', weight: 5, opacity: 0.85,
+      dashArray: rutaCoords.length > 2 ? null : '8, 8',
+    }).addTo(map);
+
+    // Re-encuadrar con la ruta completa
+    map.fitBounds(rutaLayer.getBounds(), { padding: [80, 80], maxZoom: 16 });
+
+    // Calcular precios con la distancia REAL
+    const precioBase    = (3.5 + distKm * 2.2).toFixed(2);
+    const precioPremium = (5.0 + distKm * 3.0).toFixed(2);
+
     document.querySelector('#opt-basico  span.text-label-lg').textContent  = 'S/ ' + precioBase;
     document.querySelector('#opt-premium span.text-label-lg').textContent  = 'S/ ' + precioPremium;
     document.querySelector('#opt-basico  .text-label-md').textContent = minutos + ' min · ' + distKm.toFixed(1) + ' km';
     document.querySelector('#opt-premium .text-label-md').textContent = Math.max(3, minutos - 2) + ' min · Aire acond.';
 
-    // Guardar para detalles
-    window._precioBase = precioBase;
+    // Guardar para la pantalla detalles (incluyendo la geometría)
+    window._precioBase    = precioBase;
     window._precioPremium = precioPremium;
-    window._minutos = minutos;
+    window._minutos       = minutos;
+    window._rutaCoords    = rutaCoords;
+  }
+
+  // ─── OSRM — Open Source Routing Machine (gratis, sin API key) ──
+  async function obtenerRutaOSRM(origen, destino) {
+    const url = `https://router.project-osrm.org/route/v1/driving/` +
+                `${origen.lng},${origen.lat};${destino.lng},${destino.lat}` +
+                `?overview=full&geometries=geojson`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('OSRM HTTP ' + r.status);
+    const data = await r.json();
+    if (!data.routes || !data.routes.length) throw new Error('Sin rutas');
+    const ruta = data.routes[0];
+    // OSRM usa [lng, lat], Leaflet espera [lat, lng] → swap
+    const coords = ruta.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    return {
+      coords,
+      distKm: ruta.distance / 1000,
+      minutos: Math.max(3, Math.round(ruta.duration / 60)),
+    };
   }
 
   // Haversine

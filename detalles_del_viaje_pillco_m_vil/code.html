@@ -442,11 +442,26 @@
       })
     }).addTo(m).bindPopup('Destino');
 
-    // Ruta
-    L.polyline(
-      [[origen.lat, origen.lng], [destino.lat, destino.lng]],
-      { color: '#003820', weight: 4, opacity: 0.85 }
-    ).addTo(m);
+    // Ruta — usa OSRM si está disponible, fallback a línea recta
+    let rutaCoords = viaje.ruta;
+    if (rutaCoords && rutaCoords.length > 2) {
+      // Tenemos la ruta real desde el mapa
+      L.polyline(rutaCoords, { color: '#003820', weight: 5, opacity: 0.85 }).addTo(m);
+    } else {
+      // Sin ruta guardada → intentar obtenerla de OSRM
+      L.polyline(
+        [[origen.lat, origen.lng], [destino.lat, destino.lng]],
+        { color: '#003820', weight: 4, opacity: 0.6, dashArray: '8, 8' }
+      ).addTo(m);
+      fetch(`https://router.project-osrm.org/route/v1/driving/${origen.lng},${origen.lat};${destino.lng},${destino.lat}?overview=full&geometries=geojson`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.routes && data.routes[0]) {
+            const coords = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+            L.polyline(coords, { color: '#003820', weight: 5, opacity: 0.85 }).addTo(m);
+          }
+        }).catch(() => {});
+    }
 
     // Marker del conductor en movimiento
     let driverPos = [
