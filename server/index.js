@@ -124,6 +124,43 @@ app.post('/api/auth/oauth', (req, res) => {
 // ───────────────────────────────────────────────────────────
 //  AUTH — Conductores
 // ───────────────────────────────────────────────────────────
+app.post('/api/driver/register', async (req, res) => {
+  const { nombre, tel, password, vehiculo, placa, tipo, licencia, soat, antecedentes } = req.body;
+
+  if (!nombre || !/^\d{9}$/.test(tel || '') || (password || '').length < 8)
+    return res.status(400).json({ error: 'Datos personales inválidos' });
+  if (!vehiculo || !placa || !tipo)
+    return res.status(400).json({ error: 'Faltan datos del vehículo' });
+  if (!['basico','premium','moto','xl','delivery'].includes(tipo))
+    return res.status(400).json({ error: 'Tipo de servicio inválido' });
+
+  const drivers = getCollection('drivers');
+  if (drivers.find(d => d.tel === tel))   return res.status(409).json({ error: 'Teléfono ya registrado' });
+  if (drivers.find(d => d.placa === placa)) return res.status(409).json({ error: 'Placa ya registrada' });
+
+  const drv = {
+    id: uid('drv'),
+    nombre, tel,
+    password: await bcrypt.hash(password, 10),
+    vehiculo, placa, tipo,
+    rating: 5.0,
+    lat: -9.9306, lng: -76.2422, // Plaza de Armas por defecto
+    online: false, status: 'offline',
+    licencia: !!licencia, soat: !!soat, antecedentes: !!antecedentes,
+    docsAprobados: false,        // ⚠️ requiere aprobación admin
+    monedero: 0, viajesTotal: 0,
+    creado: new Date().toISOString(),
+  };
+  drivers.push(drv); save();
+  addLog('registro_conductor', `${nombre} (${tel}) · ${vehiculo} ${placa} · pendiente aprobación`);
+
+  // Notificar al admin
+  io.to('admin').emit('driver_update', sanitizeDriver(drv));
+
+  const token = sign({ id: drv.id, role: 'driver', nombre });
+  res.json({ token, driver: sanitizeDriver(drv) });
+});
+
 app.post('/api/driver/login', async (req, res) => {
   const { tel, password } = req.body;
   const drivers = getCollection('drivers');

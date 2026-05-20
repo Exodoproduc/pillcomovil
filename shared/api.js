@@ -44,7 +44,8 @@
     login:    (tel, password)  => req('POST', '/api/auth/login', { tel, password }, false),
     oauth:    (provider, nombre) => req('POST', '/api/auth/oauth', { provider, nombre }, false),
     googleSignIn: (credential)   => req('POST', '/api/auth/google', { credential }, false),
-    driverLogin: (tel, password) => req('POST', '/api/driver/login', { tel, password }, false),
+    driverLogin:    (tel, password) => req('POST', '/api/driver/login', { tel, password }, false),
+    driverRegister: (data)          => req('POST', '/api/driver/register', data, false),
     adminLogin:  (usuario, password) => req('POST', '/api/admin/login', { usuario, password }, false),
 
     // Viajes
