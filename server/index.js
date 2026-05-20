@@ -6,6 +6,7 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 
 const { init: initDb, getCollection, save, addLog } = require('./lib/db');
@@ -13,13 +14,75 @@ const { sign, authRequired } = require('./lib/auth');
 const { cotizar } = require('./lib/pricing');
 const { encontrarConductores } = require('./lib/matching');
 
+// ════════════════════════════════════════════════════════════
+//  CORS — Whitelist de orígenes permitidos
+// ════════════════════════════════════════════════════════════
+const ORIGENES_PERMITIDOS = [
+  'https://stitchpillcogo.vercel.app',  // producción
+  'http://localhost:8765',               // dev local frontend
+  'http://127.0.0.1:8765',              // dev local alt
+  'http://localhost:3000',               // dev local Next/CRA
+  'capacitor://localhost',               // app iOS futura
+  'http://localhost',                    // app Android futura
+];
+
+function corsOriginCheck(origin, callback) {
+  // Sin origin = curl, Postman, server-to-server, Socket.IO polling
+  if (!origin) return callback(null, true);
+  // Permitir cualquier deploy preview de Vercel (los URL preview cambian)
+  if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return callback(null, true);
+  if (ORIGENES_PERMITIDOS.includes(origin)) return callback(null, true);
+  console.warn('[CORS] Bloqueado:', origin);
+  return callback(new Error('No autorizado por CORS: ' + origin));
+}
+
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, {
+  cors: { origin: corsOriginCheck, credentials: true },
+});
 
-app.use(cors());
-app.use(express.json());
+// Render/Heroku/Vercel ponen proxy delante: necesario para que rate-limit
+// use la IP real del cliente (req.ip) en vez de la del proxy.
+app.set('trust proxy', 1);
+
+app.use(cors({ origin: corsOriginCheck, credentials: true }));
+app.use(express.json({ limit: '100kb' }));
 app.use((req, _res, next) => { console.log(`${req.method} ${req.url}`); next(); });
+
+// ════════════════════════════════════════════════════════════
+//  Rate Limiting — Anti fuerza bruta / spam / DoS
+// ════════════════════════════════════════════════════════════
+const limit = (windowMin, max, mensaje) => rateLimit({
+  windowMs: windowMin * 60_000,
+  max,
+  message: { error: mensaje || 'Demasiados intentos. Intenta más tarde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Confiar en el proxy de Render para sacar la IP real
+  validate: { trustProxy: false },
+});
+
+// Login — bloquear fuerza bruta
+app.use('/api/admin/login',  limit(15, 5,  'Demasiados intentos de login admin (5/15min)'));
+app.use('/api/driver/login', limit(15, 10, 'Demasiados intentos de login (10/15min)'));
+app.use('/api/auth/login',   limit(15, 10, 'Demasiados intentos de login (10/15min)'));
+
+// OTP — proteger costo Twilio
+app.use('/api/auth/otp',     limit(60, 3,  'Máximo 3 OTPs por hora'));
+
+// Registros — evitar spam de cuentas falsas
+app.use('/api/auth/register',    limit(60, 5, 'Máximo 5 registros por hora'));
+app.use('/api/driver/register',  limit(60, 3, 'Máximo 3 registros de conductor por hora'));
+
+// Google Sign-In
+app.use('/api/auth/google',  limit(15, 20, 'Demasiados intentos Google (20/15min)'));
+
+// Soporte
+app.use('/api/support/ticket', limit(60, 10, 'Máximo 10 tickets por hora'));
+
+// Global — protección contra DoS
+app.use('/api/', limit(1, 120, 'Demasiadas peticiones (120/min). Espera un momento.'));
 
 const uid = (p) => p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const otpStore = new Map(); // tel -> { code, exp }
